@@ -1,0 +1,38 @@
+# Docker Compose — PostgreSQL + Redis for ERAOTS
+# Usage: docker compose up -d
+# Alternative: Install PostgreSQL and Redis locally (see README.md)
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: eraots-db
+    environment:
+      POSTGRES_DB: eraots
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - eraots_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: eraots-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - eraots_redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  eraots_pgdata:
+  eraots_redis:

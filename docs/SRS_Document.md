@@ -173,7 +173,7 @@ ERAOTS is a standalone, self-contained system. It receives input from biometric 
 | FR1.3 | The system SHALL reject and log events from unregistered fingerprint IDs as "unauthorized access attempts" |
 | FR1.4 | The system SHALL persist every valid scan event as an **immutable** record with a server-generated UUID |
 | FR1.5 | The system SHALL support receiving events from multiple scanners simultaneously without data loss |
-| FR1.6 | The system SHALL buffer incoming events when the database is temporarily unavailable and retry persistance upon recovery |
+| FR1.6 | The system SHALL buffer incoming events when the database is temporarily unavailable and retry persistence upon recovery |
 | FR1.7 | The system SHALL detect and flag duplicate scans (same employee, same scanner, within 10 seconds) |
 
 ---

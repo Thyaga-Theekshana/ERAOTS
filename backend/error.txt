@@ -1,0 +1,16 @@
+Traceback (most recent call last):
+  File "<string>", line 16, in test
+    res = await receive_scan_event(req, db)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\UOM\L1S2\Industry Reconnaisance\ERAOTS-1\backend\app\api\events.py", line 100, in receive_scan_event
+    return ScanEventResponse(
+        event_id=event.event_id,
+    ...<5 lines>...
+        door_name=scanner.door_name,
+    )
+  File "C:\UOM\L1S2\Industry Reconnaisance\ERAOTS-1\backend\venv\Lib\site-packages\pydantic\main.py", line 250, in __init__
+    validated_self = self.__pydantic_validator__.validate_python(data, self_instance=self)
+pydantic_core._pydantic_core.ValidationError: 1 validation error for ScanEventResponse
+event_id
+  UUID input should be a string, bytes or UUID object [type=uuid_type, input_value=None, input_type=NoneType]
+    For further information visit https://errors.pydantic.dev/2.12/v/uuid_type
