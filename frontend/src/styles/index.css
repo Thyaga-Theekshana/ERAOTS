@@ -6710,6 +6710,76 @@ tbody tr:hover {
   margin-top: 1.5rem;
 }
 
+.leave-usage-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.leave-usage-card {
+  padding: 1rem;
+  background: var(--glass-bg);
+  backdrop-filter: blur(24px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-xl);
+}
+
+.leave-usage-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.leave-usage-values {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  color: var(--on-surface);
+  font-size: 0.8125rem;
+}
+
+.leave-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.75rem;
+  padding: 1rem;
+}
+
+.leave-calendar-day {
+  min-height: 120px;
+  background: var(--surface-container);
+  border-radius: var(--radius-lg);
+  padding: 0.625rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.leave-calendar-day--muted {
+  opacity: 0.45;
+}
+
+.leave-calendar-day-num {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--on-surface);
+}
+
+.leave-calendar-events {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.form-help-text {
+  margin-top: 0.5rem;
+  color: var(--secondary);
+  font-size: 0.75rem;
+}
+
 .schedule-summary h3 {
   font-size: 1rem;
   font-weight: 600;

@@ -182,3 +182,50 @@ class EmployeeCalendarSettings(Base):
 
     def __repr__(self):
         return f"<EmployeeCalendarSettings employee={self.employee_id} provider={self.provider}>"
+
+
+class EmployeeTimezonePreference(Base):
+    """Stores client and organization timezone preferences for scheduling views."""
+    __tablename__ = "employee_timezone_preferences"
+
+    preference_id = Column(GUID(), primary_key=True, default=uuid.uuid4)
+    employee_id = Column(GUID(), ForeignKey("employees.employee_id"), nullable=False, unique=True)
+    client_timezone = Column(String(100), nullable=False, default="Asia/Colombo")
+    organization_timezone = Column(String(100), nullable=False, default="Asia/Colombo")
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    employee = relationship("Employee")
+
+    def __repr__(self):
+        return f"<EmployeeTimezonePreference employee={self.employee_id} client={self.client_timezone}>"
+
+
+class SpecialMeeting(Base):
+    """Special meeting schedule with targeted notifications for important staff."""
+    __tablename__ = "special_meetings"
+
+    meeting_id = Column(GUID(), primary_key=True, default=uuid.uuid4)
+    created_by_employee_id = Column(GUID(), ForeignKey("employees.employee_id"), nullable=False)
+    title = Column(String(255), nullable=False)
+    notes = Column(Text, nullable=True)
+    start_at_utc = Column(DateTime(timezone=True), nullable=False)
+    timezone = Column(String(100), nullable=False, default="Asia/Colombo")
+    organization_timezone = Column(String(100), nullable=False, default="Asia/Colombo")
+    duration_min = Column(Integer, nullable=False, default=30)
+    is_important = Column(Boolean, nullable=False, default=True)
+    status = Column(String(20), nullable=False, default="SCHEDULED")  # SCHEDULED, TRIGGERED, CANCELLED
+    target_roles = Column(JSONType(), nullable=True)  # ["HR_MANAGER", "MANAGER", ...]
+    triggered_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    created_by = relationship("Employee")
+
+    __table_args__ = (
+        Index("ix_special_meetings_created_by", "created_by_employee_id"),
+        Index("ix_special_meetings_start_at", "start_at_utc"),
+    )
+
+    def __repr__(self):
+        return f"<SpecialMeeting {self.title} at {self.start_at_utc}>"

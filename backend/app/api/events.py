@@ -11,21 +11,33 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional
+from zoneinfo import ZoneInfo
 import uuid
 import json
 import logging
 
 from app.core.database import get_db
 from app.core.security import hash_fingerprint
-from app.core.dependencies import get_current_user
-from app.models.employee import Employee, UserAccount
-from app.models.events import ScanEvent, OccupancyState, PendingStateTransition, OCCUPANCY_STATUSES
+from app.core.dependencies import get_current_user, require_roles
+from app.models.employee import Employee, UserAccount, Role
+from app.models.events import (
+    ScanEvent,
+    OccupancyState,
+    PendingStateTransition,
+    EmployeeCalendarSettings,
+    EmployeeTimezonePreference,
+    SpecialMeeting,
+    OCCUPANCY_STATUSES,
+)
 from app.models.hardware import Scanner
 from app.models.notifications import Notification
 from app.api.schemas import (
     ScanEventRequest, ScanEventResponse, OccupancyOverview, EmployeeOccupancyState,
     StatusOverrideRequest, StatusOverrideResponse,
     PendingTransitionResponse, TransitionActionRequest, TransitionActionResponse,
+    CalendarSettingsUpdate, CalendarSettingsResponse,
+    SpecialMeetingCreate, SpecialMeetingResponse,
+    MessageResponse,
 )
 from app.core.config import settings
 
@@ -49,6 +61,25 @@ async def broadcast_to_dashboards(message: dict):
             disconnected.append(ws)
     for ws in disconnected:
         dashboard_connections.remove(ws)
+
+
+def _parse_timezone(tz_name: Optional[str]) -> ZoneInfo:
+    try:
+        return ZoneInfo(tz_name or settings.OFFICE_TIMEZONE)
+    except Exception:
+        return ZoneInfo(settings.OFFICE_TIMEZONE)
+
+
+def _to_utc(input_dt: datetime, timezone_name: Optional[str]) -> datetime:
+    if input_dt.tzinfo is None:
+        localized = input_dt.replace(tzinfo=_parse_timezone(timezone_name))
+    else:
+        localized = input_dt
+    return localized.astimezone(timezone.utc)
+
+
+def _to_local(input_dt: datetime, timezone_name: Optional[str]) -> datetime:
+    return input_dt.astimezone(_parse_timezone(timezone_name))
 
 
 @router.post("/scan", response_model=ScanEventResponse)
@@ -700,6 +731,285 @@ async def override_status(
         new_status=target_status,
         change_source="MANUAL",
         changed_at=now,
+    )
+
+
+async def _get_or_create_calendar_settings(
+    db: AsyncSession,
+    employee_id: uuid.UUID,
+) -> EmployeeCalendarSettings:
+    result = await db.execute(
+        select(EmployeeCalendarSettings).where(EmployeeCalendarSettings.employee_id == employee_id)
+    )
+    settings_row = result.scalar_one_or_none()
+    if settings_row:
+        return settings_row
+
+    settings_row = EmployeeCalendarSettings(
+        employee_id=employee_id,
+        provider="NONE",
+        is_enabled=False,
+        sync_enabled=False,
+        auto_transition_enabled=True,
+    )
+    db.add(settings_row)
+    await db.flush()
+    return settings_row
+
+
+async def _get_or_create_timezone_preferences(
+    db: AsyncSession,
+    employee_id: uuid.UUID,
+) -> EmployeeTimezonePreference:
+    result = await db.execute(
+        select(EmployeeTimezonePreference).where(EmployeeTimezonePreference.employee_id == employee_id)
+    )
+    pref = result.scalar_one_or_none()
+    if pref:
+        return pref
+
+    pref = EmployeeTimezonePreference(
+        employee_id=employee_id,
+        client_timezone=settings.OFFICE_TIMEZONE,
+        organization_timezone=settings.OFFICE_TIMEZONE,
+    )
+    db.add(pref)
+    await db.flush()
+    return pref
+
+
+def _serialize_special_meeting(meeting: SpecialMeeting) -> SpecialMeetingResponse:
+    return SpecialMeetingResponse(
+        meeting_id=meeting.meeting_id,
+        title=meeting.title,
+        notes=meeting.notes,
+        start_at_utc=meeting.start_at_utc,
+        start_at_local=_to_local(meeting.start_at_utc, meeting.timezone),
+        timezone=meeting.timezone,
+        organization_timezone=meeting.organization_timezone,
+        duration_min=meeting.duration_min,
+        is_important=meeting.is_important,
+        status=meeting.status,
+        notified_count=0,
+        triggered_at=meeting.triggered_at,
+        created_at=meeting.created_at,
+    )
+
+
+async def _get_important_employee_ids(db: AsyncSession) -> List[uuid.UUID]:
+    result = await db.execute(
+        select(UserAccount.employee_id)
+        .join(Role, Role.role_id == UserAccount.role_id)
+        .where(
+            UserAccount.is_active == True,  # noqa: E712
+            Role.name.in_(["SUPER_ADMIN", "HR_MANAGER", "MANAGER"]),
+        )
+    )
+    return list({row[0] for row in result.all()})
+
+
+@router.get("/calendar-settings", response_model=CalendarSettingsResponse)
+async def get_calendar_settings(
+    current_user: UserAccount = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    calendar_settings = await _get_or_create_calendar_settings(db, current_user.employee_id)
+    timezone_pref = await _get_or_create_timezone_preferences(db, current_user.employee_id)
+
+    return CalendarSettingsResponse(
+        settings_id=calendar_settings.settings_id,
+        employee_id=calendar_settings.employee_id,
+        provider=calendar_settings.provider,
+        is_enabled=calendar_settings.is_enabled,
+        sync_enabled=calendar_settings.sync_enabled,
+        auto_transition_enabled=calendar_settings.auto_transition_enabled,
+        timezone=timezone_pref.client_timezone,
+        organization_timezone=timezone_pref.organization_timezone,
+        ical_url=calendar_settings.ical_url,
+        last_sync_at=calendar_settings.last_sync_at,
+        sync_error=calendar_settings.sync_error,
+    )
+
+
+@router.put("/calendar-settings", response_model=CalendarSettingsResponse)
+async def update_calendar_settings(
+    payload: CalendarSettingsUpdate,
+    current_user: UserAccount = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    allowed_providers = {"NONE", "GOOGLE", "MICROSOFT", "ICAL"}
+    if payload.provider and payload.provider.upper() not in allowed_providers:
+        raise HTTPException(status_code=400, detail="Invalid calendar provider")
+
+    calendar_settings = await _get_or_create_calendar_settings(db, current_user.employee_id)
+    timezone_pref = await _get_or_create_timezone_preferences(db, current_user.employee_id)
+
+    if payload.provider is not None:
+        calendar_settings.provider = payload.provider.upper()
+    if payload.is_enabled is not None:
+        calendar_settings.is_enabled = payload.is_enabled
+    if payload.sync_enabled is not None:
+        calendar_settings.sync_enabled = payload.sync_enabled
+    if payload.auto_transition_enabled is not None:
+        calendar_settings.auto_transition_enabled = payload.auto_transition_enabled
+    if payload.ical_url is not None:
+        calendar_settings.ical_url = payload.ical_url
+
+    if calendar_settings.provider != "ICAL":
+        calendar_settings.ical_url = None
+
+    if payload.timezone is not None:
+        timezone_pref.client_timezone = payload.timezone
+    if payload.organization_timezone is not None:
+        timezone_pref.organization_timezone = payload.organization_timezone
+    if not timezone_pref.organization_timezone:
+        timezone_pref.organization_timezone = settings.OFFICE_TIMEZONE
+
+    await db.flush()
+    return CalendarSettingsResponse(
+        settings_id=calendar_settings.settings_id,
+        employee_id=calendar_settings.employee_id,
+        provider=calendar_settings.provider,
+        is_enabled=calendar_settings.is_enabled,
+        sync_enabled=calendar_settings.sync_enabled,
+        auto_transition_enabled=calendar_settings.auto_transition_enabled,
+        timezone=timezone_pref.client_timezone,
+        organization_timezone=timezone_pref.organization_timezone,
+        ical_url=calendar_settings.ical_url,
+        last_sync_at=calendar_settings.last_sync_at,
+        sync_error=calendar_settings.sync_error,
+    )
+
+
+@router.get(
+    "/special-meetings",
+    response_model=List[SpecialMeetingResponse],
+    dependencies=[Depends(require_roles(["SUPER_ADMIN", "HR_MANAGER", "MANAGER"]))],
+)
+async def list_special_meetings(
+    db: AsyncSession = Depends(get_db),
+    current_user: UserAccount = Depends(get_current_user),
+):
+    rows = (
+        await db.execute(
+            select(SpecialMeeting)
+            .where(SpecialMeeting.created_by_employee_id == current_user.employee_id)
+            .order_by(SpecialMeeting.start_at_utc.desc())
+        )
+    ).scalars().all()
+    return [_serialize_special_meeting(m) for m in rows]
+
+
+@router.post(
+    "/special-meetings",
+    response_model=SpecialMeetingResponse,
+    dependencies=[Depends(require_roles(["SUPER_ADMIN", "HR_MANAGER", "MANAGER"]))],
+)
+async def create_special_meeting(
+    payload: SpecialMeetingCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserAccount = Depends(get_current_user),
+):
+    time_pref = await _get_or_create_timezone_preferences(db, current_user.employee_id)
+    org_tz = time_pref.organization_timezone or settings.OFFICE_TIMEZONE
+    start_utc = _to_utc(payload.start_at, payload.timezone)
+
+    meeting = SpecialMeeting(
+        created_by_employee_id=current_user.employee_id,
+        title=payload.title.strip(),
+        notes=payload.notes,
+        start_at_utc=start_utc,
+        timezone=payload.timezone or settings.OFFICE_TIMEZONE,
+        organization_timezone=org_tz,
+        duration_min=payload.duration_min,
+        is_important=payload.is_important,
+        status="SCHEDULED",
+        target_roles=["SUPER_ADMIN", "HR_MANAGER", "MANAGER"],
+    )
+    db.add(meeting)
+    await db.flush()
+
+    target_ids = await _get_important_employee_ids(db)
+    if current_user.employee_id not in target_ids:
+        target_ids.append(current_user.employee_id)
+
+    for employee_id in target_ids:
+        db.add(Notification(
+            recipient_id=employee_id,
+            title=f"Special Meeting Scheduled: {meeting.title}",
+            message=(
+                f"Starts at {_to_local(start_utc, meeting.timezone).strftime('%Y-%m-%d %H:%M %Z')} "
+                f"({meeting.timezone}) | Factory time: {_to_local(start_utc, meeting.organization_timezone).strftime('%Y-%m-%d %H:%M %Z')}"
+            ),
+            type="MEETING_TRANSITION",
+            channel="IN_APP",
+            priority="HIGH",
+            delivery_status="DELIVERED",
+            is_actionable=False,
+        ))
+
+    response = _serialize_special_meeting(meeting)
+    response.notified_count = len(target_ids)
+    return response
+
+
+@router.post(
+    "/special-meetings/{meeting_id}/trigger",
+    response_model=MessageResponse,
+    dependencies=[Depends(require_roles(["SUPER_ADMIN", "HR_MANAGER", "MANAGER"]))],
+)
+async def trigger_special_meeting(
+    meeting_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserAccount = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(SpecialMeeting).where(SpecialMeeting.meeting_id == meeting_id)
+    )
+    meeting = result.scalar_one_or_none()
+    if not meeting:
+        raise HTTPException(status_code=404, detail="Special meeting not found")
+
+    if meeting.status == "CANCELLED":
+        raise HTTPException(status_code=400, detail="Cannot trigger a cancelled meeting")
+
+    target_ids = await _get_important_employee_ids(db)
+    transitions_created = 0
+
+    for employee_id in target_ids:
+        state_result = await db.execute(
+            select(OccupancyState).where(OccupancyState.employee_id == employee_id)
+        )
+        occupancy_state = state_result.scalar_one_or_none()
+        if not occupancy_state or occupancy_state.current_status in ("OUTSIDE", "IN_MEETING"):
+            continue
+
+        pending_result = await db.execute(
+            select(PendingStateTransition).where(
+                and_(
+                    PendingStateTransition.employee_id == employee_id,
+                    PendingStateTransition.status == "PENDING",
+                )
+            )
+        )
+        if pending_result.scalar_one_or_none():
+            continue
+
+        await create_meeting_transition(
+            db=db,
+            employee_id=employee_id,
+            calendar_event_id=str(meeting.meeting_id),
+            calendar_event_title=f"[SPECIAL] {meeting.title}",
+            current_status=occupancy_state.current_status,
+        )
+        transitions_created += 1
+
+    meeting.status = "TRIGGERED"
+    meeting.triggered_at = datetime.now(timezone.utc)
+
+    return MessageResponse(
+        message=f"Triggered special meeting for {transitions_created} important employee(s)",
+        detail=f"Meeting: {meeting.title}",
     )
 
 
