@@ -21,8 +21,10 @@ class Schedule(Base):
     start_time = Column(Time, nullable=False)
     end_time = Column(Time, nullable=False)
     grace_period_min = Column(Integer, nullable=False, default=15)
+    break_duration_minutes = Column(Integer, nullable=True, default=60)
     department_id = Column(GUID(), ForeignKey("departments.department_id"), nullable=True)
     is_default = Column(Boolean, default=False, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
@@ -41,6 +43,7 @@ class EmployeeSchedule(Base):
     id = Column(GUID(), primary_key=True, default=uuid.uuid4)
     employee_id = Column(GUID(), ForeignKey("employees.employee_id"), nullable=False)
     schedule_id = Column(GUID(), ForeignKey("schedules.schedule_id"), nullable=False)
+    day_of_week = Column(Integer, nullable=True)  # 0=Monday, 6=Sunday; None means all days
     effective_from = Column(Date, nullable=False)
     effective_to = Column(Date, nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))

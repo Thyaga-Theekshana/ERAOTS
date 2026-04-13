@@ -38,6 +38,10 @@ from app.api.schemas import (
     DepartmentUpdate,
     ScanEventRequest,
     StatusOverrideRequest,
+    LeaveRequestCreate,
+    LeaveRequestResponse,
+    LeaveUsageSummary,
+    LeaveCalendarEntry,
 )
 
 
@@ -279,6 +283,143 @@ class TestStatusOverrideRequest:
         for status in valid_statuses:
             request = StatusOverrideRequest(status=status)
             assert request.status == status
+
+
+class TestLeaveRequestCreate:
+    """
+    Test suite for leave request creation schema (FR8.4).
+    """
+
+    @pytest.mark.unit
+    def test_valid_leave_request_create(self):
+        """Valid leave request should pass validation."""
+        leave_type_id = uuid4()
+        req = LeaveRequestCreate(
+            leave_type_id=leave_type_id,
+            start_date=date(2024, 6, 1),
+            end_date=date(2024, 6, 5),
+            reason="Annual vacation"
+        )
+
+        assert req.leave_type_id == leave_type_id
+        assert req.start_date == date(2024, 6, 1)
+        assert req.end_date == date(2024, 6, 5)
+        assert req.reason == "Annual vacation"
+
+    @pytest.mark.unit
+    def test_leave_request_reason_optional(self):
+        """Reason field should be optional."""
+        req = LeaveRequestCreate(
+            leave_type_id=uuid4(),
+            start_date=date(2024, 7, 1),
+            end_date=date(2024, 7, 2),
+        )
+
+        assert req.reason is None
+
+    @pytest.mark.unit
+    def test_leave_request_requires_dates(self):
+        """start_date and end_date are required."""
+        with pytest.raises(ValidationError):
+            LeaveRequestCreate(leave_type_id=uuid4())
+
+    @pytest.mark.unit
+    def test_leave_request_requires_leave_type(self):
+        """leave_type_id is required."""
+        with pytest.raises(ValidationError):
+            LeaveRequestCreate(
+                start_date=date(2024, 6, 1),
+                end_date=date(2024, 6, 5),
+            )
+
+
+class TestLeaveUsageSummary:
+    """
+    Test suite for leave usage summary schema (FR8 — role-limited visibility).
+    """
+
+    @pytest.mark.unit
+    def test_valid_leave_usage_summary(self):
+        """LeaveUsageSummary should serialize correctly."""
+        lt_id = uuid4()
+        summary = LeaveUsageSummary(
+            leave_type_id=lt_id,
+            leave_type_name="Annual Leave",
+            used_days=10,
+            remaining_days=10,
+            max_days_per_year=20,
+            warning_level="NONE",
+        )
+
+        assert summary.leave_type_id == lt_id
+        assert summary.used_days == 10
+        assert summary.remaining_days == 10
+        assert summary.warning_level == "NONE"
+
+    @pytest.mark.unit
+    def test_leave_usage_warning_levels(self):
+        """warning_level should accept NONE, NEAR_LIMIT, EXCEEDED."""
+        for level in ["NONE", "NEAR_LIMIT", "EXCEEDED"]:
+            summary = LeaveUsageSummary(
+                leave_type_id=uuid4(),
+                leave_type_name="Sick Leave",
+                used_days=5,
+                warning_level=level,
+            )
+            assert summary.warning_level == level
+
+    @pytest.mark.unit
+    def test_leave_usage_optional_fields_default(self):
+        """Optional fields should default to None / NONE."""
+        summary = LeaveUsageSummary(
+            leave_type_id=uuid4(),
+            leave_type_name="Unpaid Leave",
+            used_days=0,
+        )
+
+        assert summary.remaining_days is None
+        assert summary.max_days_per_year is None
+        assert summary.warning_level == "NONE"
+
+
+class TestLeaveCalendarEntry:
+    """
+    Test suite for leave calendar entry schema.
+    """
+
+    @pytest.mark.unit
+    def test_valid_leave_calendar_entry(self):
+        """LeaveCalendarEntry should serialize correctly."""
+        req_id = uuid4()
+        emp_id = uuid4()
+        entry = LeaveCalendarEntry(
+            request_id=req_id,
+            employee_id=emp_id,
+            employee_name="John Doe",
+            leave_type_name="Annual Leave",
+            start_date=date(2024, 8, 1),
+            end_date=date(2024, 8, 5),
+            status="APPROVED",
+        )
+
+        assert entry.request_id == req_id
+        assert entry.employee_id == emp_id
+        assert entry.status == "APPROVED"
+
+    @pytest.mark.unit
+    def test_leave_calendar_entry_pending(self):
+        """Calendar entry should support PENDING status."""
+        entry = LeaveCalendarEntry(
+            request_id=uuid4(),
+            employee_id=uuid4(),
+            start_date=date(2024, 9, 10),
+            end_date=date(2024, 9, 10),
+            status="PENDING",
+        )
+
+        assert entry.status == "PENDING"
+        assert entry.employee_name is None
+        assert entry.leave_type_name is None
 
 
 if __name__ == "__main__":
