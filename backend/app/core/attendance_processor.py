@@ -6,12 +6,18 @@ Hybrid "Away vs On-Desk" Calculation:
 - total_active_time_min: True "At Desk" time (ACTIVE status only)
 - total_meeting_time_min: Time spent in meetings (IN_MEETING status)
 - total_productive_time_min: Combined active + meeting time
+
+Source of Truth:
+- StatusLog is the primary source for all time calculations.
+  Every status change (BIOMETRIC, MANUAL, CALENDAR_SYNC) is written to StatusLog
+  by the events API, giving a complete minute-level audit trail.
+- Fallback to raw ScanEvent pairs when no StatusLog entries exist (e.g. legacy data).
 """
 from typing import Optional
 from datetime import date, datetime, timedelta, timezone
 from sqlalchemy import select, and_, func
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.models.events import ScanEvent, OccupancyState, PendingStateTransition
+from app.models.events import ScanEvent, OccupancyState, PendingStateTransition, StatusLog
 from app.models.employee import Employee
 from app.models.attendance import AttendanceRecord
 import uuid
@@ -35,14 +41,33 @@ async def get_status_transitions_for_day(
 ) -> list[StatusTransition]:
     """
     Build a timeline of status transitions for a specific day.
-    Combines scan events with pending state transitions to track ACTIVE vs IN_MEETING time.
+
+    Primary source: StatusLog (covers biometric, manual, and calendar changes).
+    Fallback: ScanEvent pairs (for data recorded before StatusLog was introduced).
     """
     start_of_day = datetime.combine(target_date, datetime.min.time(), tzinfo=timezone.utc)
     end_of_day = datetime.combine(target_date, datetime.max.time(), tzinfo=timezone.utc)
-    
+
+    # ── Primary: StatusLog ──────────────────────────────────────────────────────
+    log_stmt = select(StatusLog).where(
+        and_(
+            StatusLog.employee_id == employee_id,
+            StatusLog.changed_at >= start_of_day,
+            StatusLog.changed_at <= end_of_day,
+        )
+    ).order_by(StatusLog.changed_at.asc())
+
+    log_entries = (await db.execute(log_stmt)).scalars().all()
+
+    if log_entries:
+        return [
+            StatusTransition(entry.changed_at, entry.to_status, entry.source)
+            for entry in log_entries
+        ]
+
+    # ── Fallback: reconstruct from ScanEvent + resolved PendingStateTransition ──
     transitions = []
-    
-    # Get all scan events for the day
+
     scan_stmt = select(ScanEvent).where(
         and_(
             ScanEvent.employee_id == employee_id,
@@ -51,16 +76,16 @@ async def get_status_transitions_for_day(
             ScanEvent.is_valid == True
         )
     ).order_by(ScanEvent.scan_timestamp.asc())
-    
+
     scan_events = (await db.execute(scan_stmt)).scalars().all()
-    
+
     for event in scan_events:
         if event.direction == "IN":
             transitions.append(StatusTransition(event.scan_timestamp, "ACTIVE", "BIOMETRIC"))
         elif event.direction == "OUT":
             transitions.append(StatusTransition(event.scan_timestamp, "OUTSIDE", "BIOMETRIC"))
-    
-    # Get resolved pending transitions (to track IN_MEETING periods)
+
+    # Resolved calendar transitions (IN_MEETING periods)
     transition_stmt = select(PendingStateTransition).where(
         and_(
             PendingStateTransition.employee_id == employee_id,
@@ -69,16 +94,14 @@ async def get_status_transitions_for_day(
             PendingStateTransition.status.in_(["CONFIRMED", "AUTO_CONFIRMED"])
         )
     ).order_by(PendingStateTransition.resolved_at.asc())
-    
+
     pending_transitions = (await db.execute(transition_stmt)).scalars().all()
-    
+
     for pt in pending_transitions:
         if pt.resolved_at:
             transitions.append(StatusTransition(pt.resolved_at, "IN_MEETING", "CALENDAR_SYNC"))
-    
-    # Sort all transitions by timestamp
+
     transitions.sort(key=lambda t: t.timestamp)
-    
     return transitions
 
 
@@ -87,7 +110,12 @@ async def process_daily_attendance(db: AsyncSession, target_date: date, employee
     Process attendance for a specific date. 
     If employee_id is provided, process only for that employee.
     
-    Updated to separate ACTIVE (At Desk) time from IN_MEETING time.
+    Updated to use StatusLog as the primary source of truth for time breakdowns:
+    - total_active_time_min:      Time with ACTIVE status (truly at desk)
+    - total_meeting_time_min:     Time with IN_MEETING status
+    - total_productive_time_min:  active + meeting
+    - total_break_duration_min:   Time with ON_BREAK or AWAY status while inside
+    - total_time_in_building_min: first_entry → last_exit wall-clock span
     """
     # Start and end of the day in UTC
     start_of_day = datetime.combine(target_date, datetime.min.time(), tzinfo=timezone.utc)
@@ -103,7 +131,7 @@ async def process_daily_attendance(db: AsyncSession, target_date: date, employee
     processed_records = []
 
     for emp in employees:
-        # 2. Get all valid scan events for this employee on this day
+        # 2. Get all valid scan events for first_entry / last_exit timestamps
         stmt = select(ScanEvent).where(
             and_(
                 ScanEvent.employee_id == emp.employee_id,
@@ -118,46 +146,61 @@ async def process_daily_attendance(db: AsyncSession, target_date: date, employee
         if not events:
             continue  # Person didn't show up
         
-        # 3. Get status transitions for detailed time tracking
+        # 3. Get status transitions — StatusLog is the primary source (FR4)
         transitions = await get_status_transitions_for_day(db, emp.employee_id, target_date)
 
-        # 4. Calculate metrics with IN_MEETING separation
+        # 4. Calculate time metrics from status transitions
         first_entry = events[0].scan_timestamp
         last_exit = events[-1].scan_timestamp if len(events) > 1 else None
         
-        total_active_minutes = 0  # True desk time
-        total_meeting_minutes = 0  # IN_MEETING time
+        total_active_minutes = 0
+        total_meeting_minutes = 0
         total_break_minutes = 0
         break_count = 0
         
-        current_state = "OUT"
-        last_time = None
-        
-        # Process based on status transitions if available
         if len(transitions) > 1:
-            for i, transition in enumerate(transitions):
-                if i == 0:
-                    last_time = transition.timestamp
-                    current_state = transition.status
-                    continue
-                
-                # Calculate time spent in previous state
-                if last_time:
-                    delta_minutes = int((transition.timestamp - last_time).total_seconds() / 60)
-                    
-                    if current_state == "ACTIVE":
-                        total_active_minutes += delta_minutes
-                    elif current_state == "IN_MEETING":
-                        total_meeting_minutes += delta_minutes
-                    elif current_state == "OUTSIDE" and delta_minutes > 0:
-                        # They were outside (break) but came back
-                        total_break_minutes += delta_minutes
-                        break_count += 1
-                
-                last_time = transition.timestamp
-                current_state = transition.status
+            for i in range(len(transitions) - 1):
+                current = transitions[i]
+                next_t = transitions[i + 1]
+                delta_minutes = int((next_t.timestamp - current.timestamp).total_seconds() / 60)
+
+                if current.status == "ACTIVE":
+                    total_active_minutes += delta_minutes
+                elif current.status == "IN_MEETING":
+                    total_meeting_minutes += delta_minutes
+                elif current.status in ("ON_BREAK", "AWAY") and delta_minutes > 0:
+                    total_break_minutes += delta_minutes
+                    break_count += 1
+
+            # Handle the final segment (employee still inside at time of processing)
+            last_transition = transitions[-1]
+            if last_transition.status != "OUTSIDE":
+                now = datetime.now(timezone.utc)
+                if now < end_of_day:
+                    trailing = int((now - last_transition.timestamp).total_seconds() / 60)
+                    if last_transition.status == "IN_MEETING":
+                        total_meeting_minutes += trailing
+                    elif last_transition.status in ("ON_BREAK", "AWAY"):
+                        total_break_minutes += trailing
+                    elif last_transition.status == "ACTIVE":
+                        total_active_minutes += trailing
+
+        elif len(transitions) == 1:
+            # Only one transition (entry, never left) — count time until now or end-of-day
+            single = transitions[0]
+            if single.status != "OUTSIDE":
+                now = datetime.now(timezone.utc)
+                cap = min(now, end_of_day)
+                delta_minutes = int((cap - single.timestamp).total_seconds() / 60)
+                if single.status == "ACTIVE":
+                    total_active_minutes += delta_minutes
+                elif single.status == "IN_MEETING":
+                    total_meeting_minutes += delta_minutes
+
         else:
-            # Fallback to simple IN/OUT calculation if no detailed transitions
+            # No status log entries and no fallback transitions: use raw IN/OUT
+            current_state = "OUT"
+            last_time = None
             for event in events:
                 if event.direction == "IN":
                     current_state = "IN"
@@ -169,16 +212,6 @@ async def process_daily_attendance(db: AsyncSession, target_date: date, employee
                     current_state = "OUT"
                     last_time = event.scan_timestamp
 
-        # If still inside at end of day (or we're running mid-day)
-        if current_state in ("ACTIVE", "IN_MEETING", "IN") and last_time:
-            now = datetime.now(timezone.utc)
-            if now < end_of_day:
-                delta_minutes = int((now - last_time).total_seconds() / 60)
-                if current_state == "IN_MEETING":
-                    total_meeting_minutes += delta_minutes
-                else:
-                    total_active_minutes += delta_minutes
-                    
         total_time_in_building = 0
         if last_exit:
             total_time_in_building = int((last_exit - first_entry).total_seconds() / 60)
@@ -226,9 +259,9 @@ async def process_daily_attendance(db: AsyncSession, target_date: date, employee
         record.first_entry = first_entry
         record.last_exit = last_exit
         record.total_time_in_building_min = total_time_in_building
-        record.total_active_time_min = total_active_minutes  # True desk time
-        record.total_meeting_time_min = total_meeting_minutes  # IN_MEETING time
-        record.total_productive_time_min = total_productive_minutes  # active + meeting
+        record.total_active_time_min = total_active_minutes
+        record.total_meeting_time_min = total_meeting_minutes
+        record.total_productive_time_min = total_productive_minutes
         record.break_count = break_count
         record.total_break_duration_min = total_break_minutes
         record.is_late = is_late

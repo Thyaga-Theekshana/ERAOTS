@@ -2,7 +2,7 @@
 Models package — imports all models so SQLAlchemy discovers them.
 """
 from app.models.employee import Employee, Department, Role, UserAccount
-from app.models.events import ScanEvent, OccupancyState, PendingStateTransition, EmployeeCalendarSettings, OCCUPANCY_STATUSES
+from app.models.events import ScanEvent, OccupancyState, PendingStateTransition, EmployeeCalendarSettings, StatusLog, OCCUPANCY_STATUSES
 from app.models.attendance import AttendanceRecord
 from app.models.schedule import Schedule, EmployeeSchedule, LeaveType, LeaveRequest, Holiday
 from app.models.notifications import Notification, NotificationPreference
@@ -14,7 +14,7 @@ from app.models.audit import AuditLog
 
 __all__ = [
     "Employee", "Department", "Role", "UserAccount",
-    "ScanEvent", "OccupancyState", "PendingStateTransition", "EmployeeCalendarSettings", "OCCUPANCY_STATUSES",
+    "ScanEvent", "OccupancyState", "PendingStateTransition", "EmployeeCalendarSettings", "StatusLog", "OCCUPANCY_STATUSES",
     "AttendanceRecord",
     "Schedule", "EmployeeSchedule", "LeaveType", "LeaveRequest", "Holiday",
     "Notification", "NotificationPreference",

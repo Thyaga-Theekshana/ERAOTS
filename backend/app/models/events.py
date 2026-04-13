@@ -146,6 +146,61 @@ class PendingStateTransition(Base):
         return f"<PendingStateTransition {self.employee_id} {self.from_status}->{self.to_status} status={self.status}>"
 
 
+class StatusLog(Base):
+    """
+    Immutable audit log of every employee status transition.
+    
+    This is the source of truth for calculating "active hours" vs "total building time".
+    Every status change — whether from a biometric scan, manual portal toggle, or
+    calendar sync — is recorded here with a precise timestamp.
+    
+    Example: Employee enters @9am (OUTSIDE→ACTIVE), takes a break @11am (ACTIVE→ON_BREAK),
+    returns @11:20am (ON_BREAK→ACTIVE), enters meeting @2pm (ACTIVE→IN_MEETING), 
+    leaves building @5pm (IN_MEETING→OUTSIDE).
+    
+    The attendance processor sums up durations by status to compute:
+    - total_active_time_min  = ACTIVE periods
+    - total_meeting_time_min = IN_MEETING periods
+    - total_break_duration_min = ON_BREAK + AWAY periods while inside
+    - total_time_in_building_min = last_exit - first_entry
+    """
+    __tablename__ = "status_logs"
+
+    log_id = Column(GUID(), primary_key=True, default=uuid.uuid4)
+    employee_id = Column(GUID(), ForeignKey("employees.employee_id"), nullable=False)
+
+    # The status the employee transitioned FROM and TO
+    from_status = Column(String(20), nullable=True)   # NULL for the very first entry ever
+    to_status = Column(String(20), nullable=False)
+
+    # When the transition happened
+    changed_at = Column(DateTime(timezone=True), nullable=False)
+
+    # What triggered this change
+    source = Column(String(30), nullable=False)  # BIOMETRIC, MANUAL, CALENDAR_SYNC, AUTO_CONFIRM, SYSTEM
+
+    # Optional: link to the scan event that caused this (for biometric changes)
+    scan_event_id = Column(GUID(), ForeignKey("scan_events.event_id"), nullable=True)
+
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    # Relationships
+    employee = relationship("Employee", back_populates="status_logs")
+    scan_event = relationship("ScanEvent")
+
+    # Indexes for fast per-employee per-day queries
+    __table_args__ = (
+        Index("ix_status_logs_employee_changed", "employee_id", "changed_at"),
+        Index("ix_status_logs_changed_at", "changed_at"),
+    )
+
+    def __repr__(self):
+        return (
+            f"<StatusLog employee={self.employee_id} "
+            f"{self.from_status}→{self.to_status} at {self.changed_at} via {self.source}>"
+        )
+
+
 class EmployeeCalendarSettings(Base):
     """
     Maps external calendar providers for each employee.

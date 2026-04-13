@@ -59,6 +59,7 @@ class Employee(Base):
     notification_preference = relationship("NotificationPreference", back_populates="employee", uselist=False)
     correction_requests = relationship("CorrectionRequest", back_populates="employee", foreign_keys="CorrectionRequest.employee_id")
     employee_schedules = relationship("EmployeeSchedule", back_populates="employee")
+    status_logs = relationship("StatusLog", back_populates="employee")
 
     @property
     def full_name(self):
