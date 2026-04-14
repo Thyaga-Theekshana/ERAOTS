@@ -209,6 +209,25 @@ class LeaveRequestResponse(BaseModel):
         from_attributes = True
 
 
+class LeaveUsageSummary(BaseModel):
+    leave_type_id: UUID
+    leave_type_name: str
+    used_days: int
+    remaining_days: Optional[int] = None
+    max_days_per_year: Optional[int] = None
+    warning_level: str = "NONE"  # NONE, NEAR_LIMIT, EXCEEDED
+
+
+class LeaveCalendarEntry(BaseModel):
+    request_id: UUID
+    employee_id: UUID
+    employee_name: Optional[str] = None
+    leave_type_name: Optional[str] = None
+    start_date: date
+    end_date: date
+    status: str
+
+
 # ==================== PHASE C: CORRECTIONS ====================
 
 class CorrectionRequestCreate(BaseModel):
@@ -349,6 +368,8 @@ class CalendarSettingsUpdate(BaseModel):
     """Update employee calendar settings."""
     provider: Optional[str] = None  # GOOGLE, MICROSOFT, ICAL, NONE
     is_enabled: Optional[bool] = None
+    timezone: Optional[str] = None
+    organization_timezone: Optional[str] = None
     ical_url: Optional[str] = None
     sync_enabled: Optional[bool] = None
     auto_transition_enabled: Optional[bool] = None
@@ -361,11 +382,39 @@ class CalendarSettingsResponse(BaseModel):
     is_enabled: bool
     sync_enabled: bool
     auto_transition_enabled: bool
+    timezone: Optional[str] = None
+    organization_timezone: Optional[str] = None
+    ical_url: Optional[str] = None
     last_sync_at: Optional[datetime] = None
     sync_error: Optional[str] = None
 
     class Config:
         from_attributes = True
+
+
+class SpecialMeetingCreate(BaseModel):
+    title: str = Field(..., min_length=1, max_length=255)
+    start_at: datetime
+    timezone: str = Field(default="Asia/Colombo")
+    duration_min: int = Field(default=30, ge=5, le=480)
+    is_important: bool = True
+    notes: Optional[str] = None
+
+
+class SpecialMeetingResponse(BaseModel):
+    meeting_id: UUID
+    title: str
+    notes: Optional[str] = None
+    start_at_utc: datetime
+    start_at_local: datetime
+    timezone: str
+    organization_timezone: str
+    duration_min: int
+    is_important: bool
+    status: str
+    notified_count: int = 0
+    triggered_at: Optional[datetime] = None
+    created_at: datetime
 
 
 class ActionableNotificationResponse(BaseModel):

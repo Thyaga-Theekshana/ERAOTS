@@ -32,6 +32,7 @@ from app.models.employee import Employee, Department, Role, UserAccount
 from app.models.events import ScanEvent, OccupancyState, StatusLog, OCCUPANCY_STATUSES
 from app.models.hardware import Scanner
 from app.models.attendance import AttendanceRecord
+from app.models.schedule import Schedule, EmployeeSchedule, LeaveType, LeaveRequest
 
 
 class TestEmployeeModel:
@@ -480,6 +481,191 @@ class TestStatusLogModel:
         assert "ACTIVE" in repr_str
         assert "ON_BREAK" in repr_str
         assert "MANUAL" in repr_str
+
+
+class TestScheduleModel:
+    """
+    Test suite for Schedule model (FR8.1).
+    """
+
+    @pytest.mark.unit
+    def test_schedule_instantiation(self):
+        """Schedule should instantiate with required fields."""
+        from datetime import time
+        sched = Schedule(
+            name="Standard 9-5",
+            start_time=time(9, 0),
+            end_time=time(17, 0),
+        )
+
+        assert sched.name == "Standard 9-5"
+        assert sched.start_time == time(9, 0)
+        assert sched.end_time == time(17, 0)
+
+    @pytest.mark.unit
+    def test_schedule_break_duration(self):
+        """Schedule should support break_duration_minutes field."""
+        from datetime import time
+        sched = Schedule(
+            name="Early Shift 7-3",
+            start_time=time(7, 0),
+            end_time=time(15, 0),
+            break_duration_minutes=30,
+        )
+
+        assert sched.break_duration_minutes == 30
+
+    @pytest.mark.unit
+    def test_schedule_is_active_field(self):
+        """Schedule should support is_active field."""
+        from datetime import time
+        sched = Schedule(
+            name="Night Shift",
+            start_time=time(22, 0),
+            end_time=time(6, 0),
+            is_active=True,
+        )
+
+        assert sched.is_active is True
+
+    @pytest.mark.unit
+    def test_schedule_department_optional(self):
+        """Schedule department_id should be optional."""
+        from datetime import time
+        sched = Schedule(
+            name="Flexible Hours",
+            start_time=time(8, 0),
+            end_time=time(16, 0),
+        )
+
+        assert sched.department_id is None
+
+
+class TestEmployeeScheduleModel:
+    """
+    Test suite for EmployeeSchedule junction model (FR8.2).
+    """
+
+    @pytest.mark.unit
+    def test_employee_schedule_instantiation(self):
+        """EmployeeSchedule should instantiate with required fields."""
+        emp_id = uuid4()
+        sched_id = uuid4()
+        today = date.today()
+
+        es = EmployeeSchedule(
+            employee_id=emp_id,
+            schedule_id=sched_id,
+            effective_from=today,
+        )
+
+        assert es.employee_id == emp_id
+        assert es.schedule_id == sched_id
+        assert es.effective_from == today
+
+    @pytest.mark.unit
+    def test_employee_schedule_day_of_week(self):
+        """EmployeeSchedule should support day_of_week field (0=Monday through 6=Sunday)."""
+        es = EmployeeSchedule(
+            employee_id=uuid4(),
+            schedule_id=uuid4(),
+            effective_from=date.today(),
+            day_of_week=0,  # Monday
+        )
+
+        assert es.day_of_week == 0
+
+    @pytest.mark.unit
+    def test_employee_schedule_day_of_week_optional(self):
+        """day_of_week should be optional (None means all days)."""
+        es = EmployeeSchedule(
+            employee_id=uuid4(),
+            schedule_id=uuid4(),
+            effective_from=date.today(),
+            day_of_week=None,
+        )
+
+        assert es.day_of_week is None
+
+
+class TestLeaveTypeModel:
+    """
+    Test suite for LeaveType model (FR8.3).
+    """
+
+    @pytest.mark.unit
+    def test_leave_type_instantiation(self):
+        """LeaveType should instantiate with name."""
+        lt = LeaveType(name="Annual Leave", max_days_per_year=20, is_paid=True)
+
+        assert lt.name == "Annual Leave"
+        assert lt.max_days_per_year == 20
+        assert lt.is_paid is True
+
+    @pytest.mark.unit
+    def test_leave_type_unpaid(self):
+        """LeaveType should support unpaid leave."""
+        lt = LeaveType(name="Unpaid Leave", is_paid=False)
+
+        assert lt.is_paid is False
+
+    @pytest.mark.unit
+    def test_leave_type_no_limit(self):
+        """LeaveType max_days_per_year should be optional."""
+        lt = LeaveType(name="Sick Leave")
+
+        assert lt.max_days_per_year is None
+
+
+class TestLeaveRequestModel:
+    """
+    Test suite for LeaveRequest model (FR8.4 / FR8.5).
+    """
+
+    @pytest.mark.unit
+    def test_leave_request_instantiation(self):
+        """LeaveRequest should instantiate with required fields."""
+        emp_id = uuid4()
+        lt_id = uuid4()
+        req = LeaveRequest(
+            employee_id=emp_id,
+            leave_type_id=lt_id,
+            start_date=date(2024, 6, 1),
+            end_date=date(2024, 6, 5),
+            status="PENDING",
+        )
+
+        assert req.employee_id == emp_id
+        assert req.leave_type_id == lt_id
+        assert req.status == "PENDING"
+
+    @pytest.mark.unit
+    def test_leave_request_statuses(self):
+        """LeaveRequest should support PENDING, APPROVED, REJECTED, CANCELLED."""
+        valid_statuses = ["PENDING", "APPROVED", "REJECTED", "CANCELLED"]
+        for s in valid_statuses:
+            req = LeaveRequest(
+                employee_id=uuid4(),
+                leave_type_id=uuid4(),
+                start_date=date(2024, 7, 1),
+                end_date=date(2024, 7, 2),
+                status=s,
+            )
+            assert req.status == s
+
+    @pytest.mark.unit
+    def test_leave_request_reason_optional(self):
+        """Reason should be optional."""
+        req = LeaveRequest(
+            employee_id=uuid4(),
+            leave_type_id=uuid4(),
+            start_date=date(2024, 8, 1),
+            end_date=date(2024, 8, 1),
+            status="PENDING",
+            reason=None,
+        )
+
+        assert req.reason is None
 
 
 if __name__ == "__main__":

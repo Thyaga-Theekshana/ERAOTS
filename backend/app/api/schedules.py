@@ -3,19 +3,26 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 from typing import List, Optional
+from datetime import date
 import uuid
 
 from app.core.database import get_db
-from app.core.dependencies import get_current_user
+from app.core.dependencies import get_current_user, require_roles
 from app.models.employee import UserAccount, Department
 from app.models.schedule import LeaveRequest, LeaveType, Schedule, EmployeeSchedule
 from app.api.schemas import (
     LeaveRequestCreate,
     LeaveRequestResponse,
+    LeaveUsageSummary,
+    LeaveCalendarEntry,
     MessageResponse
 )
 
 router = APIRouter(prefix="/api/schedules", tags=["Schedules & Leave"])
+
+
+def _leave_days(start_date: date, end_date: date) -> int:
+    return max(0, (end_date - start_date).days + 1)
 
 # ==================== SCHEDULES ====================
 
@@ -207,6 +214,107 @@ async def list_leave_requests(
             reason=r.reason,
             created_at=r.created_at
         ) for r in results
+    ]
+
+
+@router.get(
+    "/leave-usage",
+    response_model=List[LeaveUsageSummary],
+    dependencies=[Depends(require_roles(["SUPER_ADMIN", "HR_MANAGER", "MANAGER"]))],
+)
+async def get_leave_usage_summary(
+    year: Optional[int] = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """Role-limited leave usage visibility (organization-level summary)."""
+    year = year or date.today().year
+
+    leave_types = (await db.execute(select(LeaveType))).scalars().all()
+    approved = (
+        await db.execute(
+            select(LeaveRequest)
+            .options(joinedload(LeaveRequest.leave_type))
+            .where(LeaveRequest.status == "APPROVED")
+        )
+    ).scalars().all()
+
+    used_by_type = {}
+    for req in approved:
+        if req.start_date.year != year and req.end_date.year != year:
+            continue
+        used_by_type[req.leave_type_id] = used_by_type.get(req.leave_type_id, 0) + _leave_days(req.start_date, req.end_date)
+
+    response = []
+    for lt in leave_types:
+        used = used_by_type.get(lt.leave_type_id, 0)
+        remaining = None
+        warning_level = "NONE"
+        if lt.max_days_per_year is not None:
+            remaining = max(0, lt.max_days_per_year - used)
+            utilization = used / lt.max_days_per_year if lt.max_days_per_year > 0 else 0
+            if utilization >= 1:
+                warning_level = "EXCEEDED"
+            elif utilization >= 0.8:
+                warning_level = "NEAR_LIMIT"
+
+        response.append(
+            LeaveUsageSummary(
+                leave_type_id=lt.leave_type_id,
+                leave_type_name=lt.name,
+                used_days=used,
+                remaining_days=remaining,
+                max_days_per_year=lt.max_days_per_year,
+                warning_level=warning_level,
+            )
+        )
+
+    return response
+
+
+@router.get("/leave-calendar", response_model=List[LeaveCalendarEntry])
+async def get_leave_calendar(
+    month: Optional[str] = Query(default=None, description="Format: YYYY-MM"),
+    db: AsyncSession = Depends(get_db),
+    current_user: UserAccount = Depends(get_current_user),
+):
+    """Calendar feed for leave requests (employees see own, authorized roles can see all)."""
+    if month:
+        try:
+            parts = month.split("-")
+            year = int(parts[0])
+            mon = int(parts[1])
+            start = date(year, mon, 1)
+            end = date(year + (1 if mon == 12 else 0), 1 if mon == 12 else mon + 1, 1)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid month format. Use YYYY-MM")
+    else:
+        today = date.today()
+        start = date(today.year, today.month, 1)
+        end = date(today.year + (1 if today.month == 12 else 0), 1 if today.month == 12 else today.month + 1, 1)
+
+    stmt = (
+        select(LeaveRequest)
+        .options(joinedload(LeaveRequest.leave_type), joinedload(LeaveRequest.employee))
+        .where(LeaveRequest.end_date >= start, LeaveRequest.start_date < end)
+        .where(LeaveRequest.status.in_(["PENDING", "APPROVED"]))
+        .order_by(LeaveRequest.start_date.asc())
+    )
+
+    if current_user.role.name == "EMPLOYEE":
+        stmt = stmt.where(LeaveRequest.employee_id == current_user.employee_id)
+
+    rows = (await db.execute(stmt)).scalars().all()
+    return [
+        LeaveCalendarEntry(
+            request_id=r.leave_id,
+            employee_id=r.employee_id,
+            employee_name=f"{r.employee.first_name} {r.employee.last_name}",
+            leave_type_name=r.leave_type.name if r.leave_type else None,
+            start_date=r.start_date,
+            end_date=r.end_date,
+            status=r.status,
+        )
+        for r in rows
     ]
 
 

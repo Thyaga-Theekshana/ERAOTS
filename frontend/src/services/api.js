@@ -86,6 +86,13 @@ export const eventsAPI = {
   cancelTransition: (transitionId) => api.put(`/api/events/pending-transitions/${transitionId}/action`, null, { params: { action: 'CANCEL' } }),
   // Status timeline — daily breakdown of active/meeting/break time (FR4)
   statusTimeline: (employeeId, date) => api.get(`/api/events/status-timeline/${employeeId}`, { params: { target_date: date } }),
+  // Calendar integration
+  getCalendarSettings: () => api.get('/api/events/calendar-settings'),
+  updateCalendarSettings: (data) => api.put('/api/events/calendar-settings', data),
+  // Important meetings
+  listSpecialMeetings: () => api.get('/api/events/special-meetings'),
+  createSpecialMeeting: (data) => api.post('/api/events/special-meetings', data),
+  triggerSpecialMeeting: (meetingId) => api.post(`/api/events/special-meetings/${meetingId}/trigger`),
 };
 
 // ==================== ATTENDANCE ====================
@@ -107,6 +114,8 @@ export const leaveAPI = {
   submitRequest: (data) => api.post('/api/schedules/leave-requests', data),
   listRequests: (status) => api.get('/api/schedules/leave-requests', { params: { status } }),
   myRequests: () => api.get('/api/schedules/leave-requests/my'),
+  getUsage: (year) => api.get('/api/schedules/leave-usage', { params: { year } }),
+  getCalendar: (month) => api.get('/api/schedules/leave-calendar', { params: { month } }),
   updateStatus: (id, status_val, comment) => api.put(`/api/schedules/leave-requests/${id}/status`, null, { params: { status: status_val, comment } })
 };
 

@@ -6710,6 +6710,137 @@ tbody tr:hover {
   margin-top: 1.5rem;
 }
 
+.leave-usage-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.leave-usage-card {
+  padding: 1rem;
+  background: var(--glass-bg);
+  backdrop-filter: blur(24px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-xl);
+}
+
+.leave-usage-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.leave-usage-values {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  color: var(--on-surface);
+  font-size: 0.8125rem;
+}
+
+.leave-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.75rem;
+  padding: 1rem;
+}
+
+.leave-calendar-day {
+  min-height: 120px;
+  background: var(--surface-container);
+  border-radius: var(--radius-lg);
+  padding: 0.625rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.leave-calendar-day--muted {
+  opacity: 0.45;
+}
+
+.leave-calendar-day-num {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--on-surface);
+}
+
+.leave-calendar-events {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.form-help-text {
+  margin-top: 0.5rem;
+  color: var(--secondary);
+  font-size: 0.75rem;
+}
+
+/* ==================== ALERT BANNER ==================== */
+.alert-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.875rem 1.25rem;
+  border-radius: var(--radius-lg);
+  margin-bottom: 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.alert-banner .material-symbols-outlined {
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+
+.alert-banner--info {
+  background: rgba(59, 130, 246, 0.12);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  color: #2563eb;
+}
+
+.alert-banner--warning {
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  color: #d97706;
+}
+
+.alert-banner--error {
+  background: rgba(183, 1, 0, 0.1);
+  border: 1px solid rgba(183, 1, 0, 0.2);
+  color: var(--primary);
+}
+
+.alert-banner--success {
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  color: #059669;
+}
+
+[data-theme="dark"] .alert-banner--info {
+  background: rgba(59, 130, 246, 0.15);
+  color: #93c5fd;
+}
+
+[data-theme="dark"] .alert-banner--warning {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fcd34d;
+}
+
+[data-theme="dark"] .alert-banner--error {
+  background: rgba(183, 1, 0, 0.18);
+  color: #fca5a5;
+}
+
+[data-theme="dark"] .alert-banner--success {
+  background: rgba(16, 185, 129, 0.15);
+  color: #6ee7b7;
+}
+
 .schedule-summary h3 {
   font-size: 1rem;
   font-weight: 600;
