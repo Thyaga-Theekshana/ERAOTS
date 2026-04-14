@@ -10,7 +10,7 @@
  */
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { eventsAPI, attendanceAPI, createDashboardSocket, leaveAPI } from '../services/api';
+import { eventsAPI, attendanceAPI, createDashboardSocket, leaveAPI, productivityAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
 export default function DashboardPage() {
@@ -35,6 +35,9 @@ export default function DashboardPage() {
   // Pending transitions state
   const [pendingTransitions, setPendingTransitions] = useState([]);
   const [transitionLoading, setTransitionLoading] = useState(false);
+  
+  // Productivity Stats
+  const [prodStats, setProdStats] = useState(null);
 
   const fetchMyStatus = useCallback(async () => {
     if (!user?.employee_id) return;
@@ -83,9 +86,19 @@ export default function DashboardPage() {
             const leaveRes = await leaveAPI.myRequests();
             const pendingLeaves = (leaveRes.data || []).filter(l => l.status === 'PENDING').length;
             setPersonalStats(prev => ({ ...prev, pendingLeaves }));
+            
+            const prodRes = await productivityAPI.getMyStats();
+            setProdStats(prodRes.data);
           } catch (e) {
-            // Leave endpoint may not be available
+            // Endpoints may not be available
           }
+        }
+        
+        if (isAdmin || isSuperAdmin || isManager) {
+          try {
+            const teamProdRes = await productivityAPI.getTeamStats();
+            setProdStats(teamProdRes.data);
+          } catch(e) {}
         }
       } catch (err) {
         console.error('Failed to fetch dashboard data:', err);
@@ -297,6 +310,29 @@ export default function DashboardPage() {
                 <span className="quick-stat-label">Pending Corrections</span>
               </div>
             </div>
+          </div>
+
+          {/* Productivity Stats (Phase 3) */}
+          <div className="dashboard-card glass-card">
+            <div className="dashboard-card-header">
+              <span className="dashboard-card-title">Productivity (Today)</span>
+              <span className="material-symbols-outlined" style={{ color: 'var(--primary)' }}>monitoring</span>
+            </div>
+            <div className="dashboard-quick-stats">
+              <div className="quick-stat">
+                <span className="quick-stat-value" style={{ color: prodStats?.efficiency_percentage >= 70 ? 'var(--success)' : 'inherit' }}>
+                  {prodStats?.efficiency_percentage || 0}%
+                </span>
+                <span className="quick-stat-label">Efficiency Ratio</span>
+              </div>
+              <div className="quick-stat">
+                <span className="quick-stat-value">{prodStats?.tickets_resolved_count || 0}</span>
+                <span className="quick-stat-label">Jira Tickets Done</span>
+              </div>
+            </div>
+            {prodStats?.status === 'No data yet for today' ? (
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', textAlign: 'center', marginTop: '10px' }}>No JIRA records yet today.</div>
+            ) : null}
           </div>
 
           <div className="dashboard-card glass-card">
@@ -528,6 +564,34 @@ export default function DashboardPage() {
                   </div>
                 ))
               )}
+            </div>
+          </div>
+        </div>
+
+        {/* Productivity Stats Card (Jira Phase 3) */}
+        <div className="bento-events-card" style={{ gridColumn: 'span 12', marginTop: '1rem' }}>
+          <div className="bento-events-header">
+            <h3 className="bento-events-title">Team Productivity</h3>
+            <span className="bento-events-badge">JIRA Sync Active</span>
+          </div>
+          <div style={{ padding: '0 20px 20px 20px', display: 'flex', gap: '40px', alignItems: 'center' }}>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <span style={{ color: 'var(--text-secondary)' }}>Avg Efficiency:</span>
+              <span style={{ fontSize: '1.4rem', fontWeight: 600, color: prodStats?.avg_efficiency_percentage >= 70 ? 'var(--success)' : 'var(--warning)' }}>
+                  {prodStats?.avg_efficiency_percentage || 0}%
+              </span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <span style={{ color: 'var(--text-secondary)' }}>Tickets Resolved Today:</span>
+              <span style={{ fontSize: '1.4rem', fontWeight: 600 }}>
+                  {prodStats?.total_tickets_resolved || 0}
+              </span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <span style={{ color: 'var(--text-secondary)' }}>Tracked Employees:</span>
+              <span style={{ fontSize: '1.4rem', fontWeight: 600 }}>
+                  {prodStats?.tracked_employees || 0}
+              </span>
             </div>
           </div>
         </div>

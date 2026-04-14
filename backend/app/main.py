@@ -5,11 +5,12 @@ Enterprise Real-Time Attendance & Occupancy Tracking System.
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
+import asyncio
 import logging
 
 from app.core.config import settings as app_settings
 from app.core.database import create_tables
-from app.api import auth, events, employees, attendance, schedules, corrections, notifications, emergency, scanners, settings, reports
+from app.api import auth, events, employees, attendance, schedules, corrections, notifications, emergency, scanners, settings, reports, calendar, productivity
 
 # Configure logging
 logging.basicConfig(
@@ -43,9 +44,19 @@ async def lifespan(app: FastAPI):
         logger.error(f"Database initialization failed: {e}")
         logger.warning("Server starting without database — some features will be unavailable")
     
+    # Start background scheduler (FR2.3, FR2.5, FR2.6)
+    from app.core.scheduler import run_scheduler
+    scheduler_task = asyncio.create_task(run_scheduler())
+    logger.info("Background scheduler started")
+    
     yield
     
-    # Shutdown
+    # Shutdown — cancel scheduler
+    scheduler_task.cancel()
+    try:
+        await scheduler_task
+    except asyncio.CancelledError:
+        pass
     logger.info("ERAOTS shutting down...")
 
 
@@ -80,6 +91,8 @@ app.include_router(emergency.router)
 app.include_router(scanners.router)
 app.include_router(settings.router)
 app.include_router(reports.router)
+app.include_router(calendar.router)
+app.include_router(productivity.router)
 
 
 @app.get("/", tags=["Health"])

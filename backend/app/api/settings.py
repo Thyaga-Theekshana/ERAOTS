@@ -34,7 +34,12 @@ async def get_policies(db: AsyncSession = Depends(get_db)):
             policy_type="OVERTIME_THRESHOLD",
             value={"threshold_min": 480}
         )
-        db.add_all([seed1, seed2])
+        seed3 = Policy(
+            name="Jira Efficiency Threshold",
+            policy_type="EFFICIENCY_THRESHOLD",
+            value={"threshold_percentage": 70}
+        )
+        db.add_all([seed1, seed2, seed3])
         await db.commit()
         
         result = await db.execute(select(Policy).where(Policy.is_active == True))

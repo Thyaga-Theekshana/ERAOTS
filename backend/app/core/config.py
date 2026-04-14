@@ -58,6 +58,16 @@ class Settings(BaseSettings):
     SIMULATOR_EMPLOYEE_COUNT: int = 20
     SIMULATOR_SCAN_INTERVAL_SECONDS: int = 30
 
+    # Google Calendar OAuth2
+    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""
+    GOOGLE_REDIRECT_URI: str = "http://localhost:8000/api/calendar/callback"
+
+    # Jira Integration
+    JIRA_URL: str = ""
+    JIRA_SERVICE_EMAIL: str = ""
+    JIRA_API_TOKEN: str = ""
+
     @property
     def cors_origins_list(self) -> List[str]:
         return [origin.strip() for origin in self.CORS_ORIGINS.split(",")]

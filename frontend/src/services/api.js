@@ -153,6 +153,20 @@ export const settingsAPI = {
   updatePolicy: (id, value) => api.put(`/api/settings/policies/${id}`, { value })
 };
 
+// ==================== CALENDAR SYNC ====================
+export const calendarAPI = {
+  getConnectUrl: () => api.get('/api/calendar/connect'),
+  disconnect: () => api.delete('/api/calendar/disconnect'),
+  getSettings: () => api.get('/api/events/calendar-settings'),
+  updateSettings: (data) => api.put('/api/events/calendar-settings', data)
+};
+
+// ==================== PRODUCTIVITY ====================
+export const productivityAPI = {
+  getMyStats: () => api.get('/api/productivity/my-stats'),
+  getTeamStats: (date) => api.get('/api/productivity/team-stats', { params: { date } })
+};
+
 // ==================== REPORTS & EXPORTS ====================
 export const reportsAPI = {
   /**

@@ -221,8 +221,9 @@ async def receive_scan_event(
             door_name=scanner.door_name,
         )
     
-    # Step 4: Smart Toggle — determine direction (FR2.1)
-    # Updated to handle IN_MEETING status and Hierarchy of Truth
+    # Step 4: Smart Toggle — determine direction (FR2.1 + FR2.2)
+    # Implements the 4-state machine: OUTSIDE → ACTIVE → ON_BREAK → AWAY
+    # Plus IN_MEETING via manual/calendar (Hierarchy of Truth)
     state_result = await db.execute(
         select(OccupancyState).where(OccupancyState.employee_id == employee.employee_id)
     )
@@ -239,23 +240,36 @@ async def receive_scan_event(
             last_change_source="BIOMETRIC",
         )
         db.add(occupancy_state)
-    else:
+    elif occupancy_state.current_status == "OUTSIDE":
+        # Was outside (not in building) → scan means ENTRY
+        direction = "IN"
         previous_status = occupancy_state.current_status
-        # Toggle based on current status (IN_MEETING is treated as "inside")
-        if occupancy_state.current_status in ("ACTIVE", "ON_BREAK", "AWAY", "IN_MEETING"):
-            # Was inside (including in meeting) → this scan means EXIT
-            direction = "OUT"
-            occupancy_state.current_status = "OUTSIDE"  # Biometric OUT = Ultimate Priority
-            occupancy_state.last_change_source = "BIOMETRIC"
-            
-            # HIERARCHY OF TRUTH: Biometric OUT aborts any pending calendar transitions
-            await abort_pending_transitions(db, employee.employee_id, "BIOMETRIC_OUT")
-        else:
-            # Was outside → this scan means ENTRY
-            direction = "IN"
-            occupancy_state.current_status = "ACTIVE"
-            occupancy_state.last_change_source = "BIOMETRIC"
+        occupancy_state.current_status = "ACTIVE"
+        occupancy_state.last_change_source = "BIOMETRIC"
+        occupancy_state.last_state_change = scan_time
+    elif occupancy_state.current_status in ("ON_BREAK", "AWAY"):
+        # Was on break or away (scanned out previously) → scan means RETURNING
+        direction = "IN"
+        previous_status = occupancy_state.current_status
+        occupancy_state.current_status = "ACTIVE"
+        occupancy_state.last_change_source = "BIOMETRIC"
+        occupancy_state.last_state_change = scan_time
+    elif occupancy_state.current_status in ("ACTIVE", "IN_MEETING"):
+        # Was inside (at desk or in meeting) → scan means EXIT (going on break)
+        direction = "OUT"
+        previous_status = occupancy_state.current_status
+        occupancy_state.current_status = "ON_BREAK"  # FR2.2: starts as ON_BREAK, not OUTSIDE
+        occupancy_state.last_change_source = "BIOMETRIC"
+        occupancy_state.last_state_change = scan_time
         
+        # HIERARCHY OF TRUTH: Biometric OUT aborts any pending calendar transitions
+        await abort_pending_transitions(db, employee.employee_id, "BIOMETRIC_OUT")
+    else:
+        # Fallback for any unexpected status — treat as entry
+        direction = "IN"
+        previous_status = occupancy_state.current_status
+        occupancy_state.current_status = "ACTIVE"
+        occupancy_state.last_change_source = "BIOMETRIC"
         occupancy_state.last_state_change = scan_time
     
     # Step 5: Create immutable ScanEvent (NFR2)
@@ -371,8 +385,9 @@ async def get_occupancy(db: AsyncSession = Depends(get_db)):
     on_break = counts.get("ON_BREAK", 0)
     away = counts.get("AWAY", 0)
     outside = counts.get("OUTSIDE", 0)
-    # IN_MEETING employees are inside the building but away from desk
-    total_inside = active + in_meeting + on_break
+    # ON_BREAK and AWAY are physically outside the building (FR2.2)
+    # Only ACTIVE + IN_MEETING employees are physically inside
+    total_inside = active + in_meeting
     
     return OccupancyOverview(
         total_inside=total_inside,

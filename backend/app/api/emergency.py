@@ -45,10 +45,12 @@ async def trigger_emergency(
     db.add(ev)
     await db.flush()
 
-    # 2. Get headcount of everyone currently INSIDE or ON_BREAK
+    # 2. Get headcount of everyone currently inside or recently stepped out
+    # ACTIVE + IN_MEETING = physically inside the building
+    # ON_BREAK = scanned out recently, may still be nearby
     occupancy_res = await db.execute(
         select(OccupancyState)
-        .where(OccupancyState.current_status.in_(["INSIDE", "ON_BREAK"]))
+        .where(OccupancyState.current_status.in_(["ACTIVE", "IN_MEETING", "ON_BREAK"]))
     )
     inside_occupants = occupancy_res.scalars().all()
     ev.headcount_at_activation = len(inside_occupants)

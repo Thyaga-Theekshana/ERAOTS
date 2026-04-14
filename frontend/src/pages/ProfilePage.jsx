@@ -4,7 +4,7 @@
  */
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { authAPI, attendanceAPI, leaveAPI } from '../services/api';
+import { authAPI, attendanceAPI, leaveAPI, calendarAPI } from '../services/api';
 
 export default function ProfilePage() {
   const { user, refreshUser } = useAuth();
@@ -26,6 +26,8 @@ export default function ProfilePage() {
     leaveDays: 0,
     pendingRequests: 0,
   });
+  const [calendarSettings, setCalendarSettings] = useState(null);
+  const [calendarLoading, setCalendarLoading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
 
   useEffect(() => {
@@ -35,8 +37,57 @@ export default function ProfilePage() {
         profile_image_url: user.profile_image_url || '',
       });
       fetchStats();
+      fetchCalendarSettings();
     }
   }, [user]);
+
+  const fetchCalendarSettings = async () => {
+    try {
+      const res = await calendarAPI.getSettings();
+      setCalendarSettings(res.data);
+    } catch (err) {
+      console.error('Failed to fetch calendar settings:', err);
+    }
+  };
+
+  const handleConnectGoogleCalendar = async () => {
+    setCalendarLoading(true);
+    try {
+      const res = await calendarAPI.getConnectUrl();
+      if (res.data && res.data.auth_url) {
+        window.location.href = res.data.auth_url;
+      }
+    } catch (err) {
+      setMessage({ type: 'error', text: err.response?.data?.detail || 'Failed to connect calendar' });
+      setCalendarLoading(false);
+    }
+  };
+
+  const handleDisconnectCalendar = async () => {
+    setCalendarLoading(true);
+    try {
+      await calendarAPI.disconnect();
+      await fetchCalendarSettings();
+      setMessage({ type: 'success', text: 'Calendar disconnected' });
+    } catch (err) {
+      setMessage({ type: 'error', text: 'Failed to disconnect calendar' });
+    } finally {
+      setCalendarLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    // Check if we came back from OAuth
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('calendar_status') === 'success') {
+      setMessage({ type: 'success', text: 'Google Calendar successfully connected!' });
+      window.history.replaceState({}, document.title, window.location.pathname);
+      fetchCalendarSettings();
+    } else if (params.get('calendar_status') === 'error') {
+      setMessage({ type: 'error', text: 'Failed to connect Google Calendar: ' + (params.get('detail') || 'Unknown error') });
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, []);
 
   const fetchStats = async () => {
     try {
@@ -246,6 +297,54 @@ export default function ProfilePage() {
             </div>
           </div>
         </div>
+
+        {/* Integrations Card */}
+        <div className="profile-card glass-card integration-card" style={{ marginTop: '20px' }}>
+          <div className="profile-card-header" style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
+            <span className="material-symbols-outlined" style={{ color: 'var(--primary)' }}>calendar_month</span>
+            <h3 style={{ margin: 0, fontSize: '1.2rem' }}>Calendar Integration</h3>
+          </div>
+          
+          <div className="integration-content" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div className="integration-info">
+              <h4 style={{ margin: '0 0 5px 0' }}>Google Calendar Sync</h4>
+              <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.9rem', maxWidth: '400px' }}>
+                Automatically transition to "In Meeting" status based on your calendar events. You'll receive a 30-second warning before any transition.
+              </p>
+              
+              {calendarSettings?.provider === 'GOOGLE' && calendarSettings?.is_enabled && (
+                <div style={{ marginTop: '10px', fontSize: '0.85rem', color: 'var(--success)', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: '1rem' }}>check_circle</span>
+                  Connected and syncing
+                  {calendarSettings.last_sync_at && ` (Last sync: ${new Date(calendarSettings.last_sync_at).toLocaleTimeString()})`}
+                </div>
+              )}
+            </div>
+            
+            <div className="integration-actions">
+              {calendarSettings?.provider === 'GOOGLE' && calendarSettings?.is_enabled ? (
+                <button 
+                  className="btn-secondary" 
+                  onClick={handleDisconnectCalendar}
+                  disabled={calendarLoading}
+                >
+                  {calendarLoading ? 'Disconnecting...' : 'Disconnect'}
+                </button>
+              ) : (
+                <button 
+                  className="btn-primary" 
+                  onClick={handleConnectGoogleCalendar}
+                  disabled={calendarLoading}
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+                >
+                  <img src="https://www.gstatic.com/images/branding/product/1x/calendar_48dp.png" alt="Google Calendar" style={{ width: '18px', height: '18px' }} />
+                  {calendarLoading ? 'Connecting...' : 'Connect Calendar'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
       </div>
 
       {/* Password Change Modal */}
