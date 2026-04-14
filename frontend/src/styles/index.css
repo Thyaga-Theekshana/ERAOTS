@@ -6780,6 +6780,67 @@ tbody tr:hover {
   font-size: 0.75rem;
 }
 
+/* ==================== ALERT BANNER ==================== */
+.alert-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.875rem 1.25rem;
+  border-radius: var(--radius-lg);
+  margin-bottom: 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.alert-banner .material-symbols-outlined {
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+
+.alert-banner--info {
+  background: rgba(59, 130, 246, 0.12);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  color: #2563eb;
+}
+
+.alert-banner--warning {
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  color: #d97706;
+}
+
+.alert-banner--error {
+  background: rgba(183, 1, 0, 0.1);
+  border: 1px solid rgba(183, 1, 0, 0.2);
+  color: var(--primary);
+}
+
+.alert-banner--success {
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  color: #059669;
+}
+
+[data-theme="dark"] .alert-banner--info {
+  background: rgba(59, 130, 246, 0.15);
+  color: #93c5fd;
+}
+
+[data-theme="dark"] .alert-banner--warning {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fcd34d;
+}
+
+[data-theme="dark"] .alert-banner--error {
+  background: rgba(183, 1, 0, 0.18);
+  color: #fca5a5;
+}
+
+[data-theme="dark"] .alert-banner--success {
+  background: rgba(16, 185, 129, 0.15);
+  color: #6ee7b7;
+}
+
 .schedule-summary h3 {
   font-size: 1rem;
   font-weight: 600;
