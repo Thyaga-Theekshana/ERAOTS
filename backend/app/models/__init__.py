@@ -9,6 +9,7 @@ from app.models.events import (
     EmployeeCalendarSettings,
     EmployeeTimezonePreference,
     SpecialMeeting,
+    StatusLog,
     OCCUPANCY_STATUSES,
 )
 from app.models.attendance import AttendanceRecord
@@ -23,7 +24,7 @@ from app.models.audit import AuditLog
 __all__ = [
     "Employee", "Department", "Role", "UserAccount",
     "ScanEvent", "OccupancyState", "PendingStateTransition", "EmployeeCalendarSettings",
-    "EmployeeTimezonePreference", "SpecialMeeting", "OCCUPANCY_STATUSES",
+    "EmployeeTimezonePreference", "SpecialMeeting", "StatusLog", "OCCUPANCY_STATUSES",
     "AttendanceRecord",
     "Schedule", "EmployeeSchedule", "LeaveType", "LeaveRequest", "Holiday",
     "Notification", "NotificationPreference",

@@ -27,6 +27,7 @@ from app.models.events import (
     EmployeeCalendarSettings,
     EmployeeTimezonePreference,
     SpecialMeeting,
+    StatusLog,
     OCCUPANCY_STATUSES,
 )
 from app.models.hardware import Scanner
@@ -61,6 +62,35 @@ async def broadcast_to_dashboards(message: dict):
             disconnected.append(ws)
     for ws in disconnected:
         dashboard_connections.remove(ws)
+
+
+async def log_status_change(
+    db: AsyncSession,
+    employee_id: uuid.UUID,
+    from_status: Optional[str],
+    to_status: str,
+    source: str,
+    changed_at: datetime,
+    scan_event_id: Optional[uuid.UUID] = None,
+) -> StatusLog:
+    """
+    Persist an immutable record of every employee status transition.
+    This is the backbone of accurate "active hours" calculation (FR4).
+    
+    Called whenever an employee's OccupancyState changes — regardless of whether
+    the change was triggered by a biometric scan, a manual portal toggle, or a
+    calendar sync event.
+    """
+    entry = StatusLog(
+        employee_id=employee_id,
+        from_status=from_status,
+        to_status=to_status,
+        source=source,
+        changed_at=changed_at,
+        scan_event_id=scan_event_id,
+    )
+    db.add(entry)
+    return entry
 
 
 def _parse_timezone(tz_name: Optional[str]) -> ZoneInfo:
@@ -201,6 +231,7 @@ async def receive_scan_event(
     if occupancy_state is None:
         # First scan ever — create state, direction is IN
         direction = "IN"
+        previous_status = None
         occupancy_state = OccupancyState(
             employee_id=employee.employee_id,
             current_status="ACTIVE",
@@ -209,6 +240,7 @@ async def receive_scan_event(
         )
         db.add(occupancy_state)
     else:
+        previous_status = occupancy_state.current_status
         # Toggle based on current status (IN_MEETING is treated as "inside")
         if occupancy_state.current_status in ("ACTIVE", "ON_BREAK", "AWAY", "IN_MEETING"):
             # Was inside (including in meeting) → this scan means EXIT
@@ -238,6 +270,17 @@ async def receive_scan_event(
     )
     db.add(event)
     await db.flush()
+    
+    # Step 5b: Log the status transition for accurate time-tracking (FR4)
+    await log_status_change(
+        db=db,
+        employee_id=employee.employee_id,
+        from_status=previous_status,
+        to_status=occupancy_state.current_status,
+        source="BIOMETRIC",
+        changed_at=scan_time,
+        scan_event_id=event.event_id,
+    )
     
     # Step 6: Update occupancy state reference
     occupancy_state.last_scan_event_id = event.event_id
@@ -376,6 +419,160 @@ async def get_employee_states(
             ))
     
     return responses
+
+
+# ==================== STATUS TIMELINE (FR4 — "Active Hours" breakdown) ====================
+
+@router.get("/status-timeline/{employee_id}")
+async def get_status_timeline(
+    employee_id: uuid.UUID,
+    target_date: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserAccount = Depends(get_current_user),
+):
+    """
+    FR4: Return the full status timeline for an employee on a given day.
+
+    This endpoint exposes the StatusLog audit trail so the frontend can render
+    a visual time-breakdown showing:
+    - Total time in building (first entry → last exit)
+    - Active / At-Desk time (ACTIVE status periods)
+    - Meeting time (IN_MEETING status periods)
+    - Break time (ON_BREAK / AWAY periods while inside)
+
+    Example response for employee who entered @9am, took a break 11:00–11:20am,
+    had a meeting 2:00–3:30pm, and left @5pm:
+    {
+        "total_building_min": 480,
+        "total_active_min": 330,
+        "total_meeting_min": 90,
+        "total_break_min": 20,
+        "segments": [
+            {"status": "ACTIVE",    "from": "09:00", "to": "11:00", "duration_min": 120},
+            {"status": "ON_BREAK",  "from": "11:00", "to": "11:20", "duration_min": 20},
+            {"status": "ACTIVE",    "from": "11:20", "to": "14:00", "duration_min": 160},
+            {"status": "IN_MEETING","from": "14:00", "to": "15:30", "duration_min": 90},
+            {"status": "ACTIVE",    "from": "15:30", "to": "17:00", "duration_min": 90},
+        ]
+    }
+    """
+    from datetime import date as date_type
+
+    # Only allow viewing own timeline unless admin/HR
+    if (current_user.employee_id != employee_id
+            and current_user.role.name == "EMPLOYEE"):
+        raise HTTPException(status_code=403, detail="Cannot view another employee's timeline")
+
+    # Parse date (defaults to today)
+    try:
+        day = date_type.fromisoformat(target_date) if target_date else date_type.today()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
+
+    start_of_day = datetime.combine(day, datetime.min.time(), tzinfo=timezone.utc)
+    end_of_day = datetime.combine(day, datetime.max.time(), tzinfo=timezone.utc)
+
+    # Fetch all status log entries for the day, in chronological order
+    log_result = await db.execute(
+        select(StatusLog)
+        .where(
+            and_(
+                StatusLog.employee_id == employee_id,
+                StatusLog.changed_at >= start_of_day,
+                StatusLog.changed_at <= end_of_day,
+            )
+        )
+        .order_by(StatusLog.changed_at.asc())
+    )
+    logs = log_result.scalars().all()
+
+    if not logs:
+        return {
+            "employee_id": str(employee_id),
+            "date": day.isoformat(),
+            "total_building_min": 0,
+            "total_active_min": 0,
+            "total_meeting_min": 0,
+            "total_break_min": 0,
+            "segments": [],
+        }
+
+    # Build time segments from consecutive log entries
+    segments = []
+    total_active = 0
+    total_meeting = 0
+    total_break = 0
+
+    for i in range(len(logs) - 1):
+        current_log = logs[i]
+        next_log = logs[i + 1]
+        duration_min = int((next_log.changed_at - current_log.changed_at).total_seconds() / 60)
+
+        segments.append({
+            "status": current_log.to_status,
+            "from": current_log.changed_at.isoformat(),
+            "to": next_log.changed_at.isoformat(),
+            "duration_min": duration_min,
+            "source": current_log.source,
+        })
+
+        if current_log.to_status == "ACTIVE":
+            total_active += duration_min
+        elif current_log.to_status == "IN_MEETING":
+            total_meeting += duration_min
+        elif current_log.to_status in ("ON_BREAK", "AWAY"):
+            total_break += duration_min
+
+    # Handle the last segment — if employee is still inside, segment runs to now
+    last_log = logs[-1]
+    if last_log.to_status != "OUTSIDE":
+        now = datetime.now(timezone.utc)
+        cap = min(now, end_of_day)
+        trailing_min = int((cap - last_log.changed_at).total_seconds() / 60)
+        if trailing_min > 0:
+            segments.append({
+                "status": last_log.to_status,
+                "from": last_log.changed_at.isoformat(),
+                "to": cap.isoformat(),
+                "duration_min": trailing_min,
+                "source": last_log.source,
+                "is_ongoing": True,
+            })
+            if last_log.to_status == "ACTIVE":
+                total_active += trailing_min
+            elif last_log.to_status == "IN_MEETING":
+                total_meeting += trailing_min
+            elif last_log.to_status in ("ON_BREAK", "AWAY"):
+                total_break += trailing_min
+
+    # Total building time = first entry to last exit (or now if still inside).
+    # Use the first log where from_status is OUTSIDE (or NULL) and to_status != OUTSIDE
+    # to correctly identify the building-entry moment regardless of subsequent transitions.
+    first_entry_log = next(
+        (lg for lg in logs if lg.to_status != "OUTSIDE" and (lg.from_status is None or lg.from_status == "OUTSIDE")),
+        None,
+    )
+    last_exit_log = None
+    for lg in reversed(logs):
+        if lg.to_status == "OUTSIDE":
+            last_exit_log = lg
+            break
+
+    total_building = 0
+    if first_entry_log:
+        end_ts = last_exit_log.changed_at if last_exit_log else min(datetime.now(timezone.utc), end_of_day)
+        total_building = int((end_ts - first_entry_log.changed_at).total_seconds() / 60)
+
+    return {
+        "employee_id": str(employee_id),
+        "date": day.isoformat(),
+        "total_building_min": total_building,
+        "total_active_min": total_active,
+        "total_meeting_min": total_meeting,
+        "total_break_min": total_break,
+        "total_productive_min": total_active + total_meeting,
+        "segments": segments,
+    }
 
 
 # ==================== WEBSOCKET (FR3.3) ====================
@@ -591,6 +788,7 @@ async def action_pending_transition(
         message = "Meeting transition cancelled. Status unchanged."
         logger.info(f"User cancelled meeting transition {transition_id}")
     else:  # CONFIRM
+        previous_status = occupancy_state.current_status if occupancy_state else "ACTIVE"
         transition.status = "CONFIRMED"
         transition.resolution_source = "USER_CONFIRM"
         transition.resolved_at = now
@@ -600,6 +798,16 @@ async def action_pending_transition(
             occupancy_state.current_status = "IN_MEETING"
             occupancy_state.last_state_change = now
             occupancy_state.last_change_source = "CALENDAR_SYNC"
+        
+        # Log the status transition for time-tracking (FR4)
+        await log_status_change(
+            db=db,
+            employee_id=current_user.employee_id,
+            from_status=previous_status,
+            to_status="IN_MEETING",
+            source="CALENDAR_SYNC",
+            changed_at=now,
+        )
         
         new_status = "IN_MEETING"
         message = "Status changed to In Meeting."
@@ -710,6 +918,16 @@ async def override_status(
     occupancy_state.current_status = target_status
     occupancy_state.last_state_change = now
     occupancy_state.last_change_source = "MANUAL"
+    
+    # Log the status transition for time-tracking (FR4)
+    await log_status_change(
+        db=db,
+        employee_id=current_user.employee_id,
+        from_status=previous_status,
+        to_status=target_status,
+        source="MANUAL",
+        changed_at=now,
+    )
     
     await db.commit()
     
@@ -1126,6 +1344,7 @@ async def process_expired_transitions(db: AsyncSession) -> int:
         
         # Only auto-confirm if employee is still inside (not scanned out)
         if occupancy_state and occupancy_state.current_status != "OUTSIDE":
+            previous_status = occupancy_state.current_status
             transition.status = "AUTO_CONFIRMED"
             transition.resolution_source = "TIMEOUT"
             transition.resolved_at = now
@@ -1133,6 +1352,16 @@ async def process_expired_transitions(db: AsyncSession) -> int:
             occupancy_state.current_status = "IN_MEETING"
             occupancy_state.last_state_change = now
             occupancy_state.last_change_source = "CALENDAR_SYNC"
+            
+            # Log the status transition for time-tracking (FR4)
+            await log_status_change(
+                db=db,
+                employee_id=transition.employee_id,
+                from_status=previous_status,
+                to_status="IN_MEETING",
+                source="AUTO_CONFIRM",
+                changed_at=now,
+            )
             
             auto_confirmed += 1
             logger.info(f"Auto-confirmed meeting transition for employee {transition.employee_id}")

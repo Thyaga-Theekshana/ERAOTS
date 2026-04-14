@@ -84,6 +84,8 @@ export const eventsAPI = {
   getPendingTransitions: () => api.get('/api/events/pending-transitions'),
   confirmTransition: (transitionId) => api.put(`/api/events/pending-transitions/${transitionId}/action`, null, { params: { action: 'CONFIRM' } }),
   cancelTransition: (transitionId) => api.put(`/api/events/pending-transitions/${transitionId}/action`, null, { params: { action: 'CANCEL' } }),
+  // Status timeline — daily breakdown of active/meeting/break time (FR4)
+  statusTimeline: (employeeId, date) => api.get(`/api/events/status-timeline/${employeeId}`, { params: { target_date: date } }),
   // Calendar integration
   getCalendarSettings: () => api.get('/api/events/calendar-settings'),
   updateCalendarSettings: (data) => api.put('/api/events/calendar-settings', data),

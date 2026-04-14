@@ -29,7 +29,7 @@ os.environ.setdefault("JWT_SECRET_KEY", "test-jwt-secret-key-for-testing")
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///./test.db")
 
 from app.models.employee import Employee, Department, Role, UserAccount
-from app.models.events import ScanEvent, OccupancyState, OCCUPANCY_STATUSES
+from app.models.events import ScanEvent, OccupancyState, StatusLog, OCCUPANCY_STATUSES
 from app.models.hardware import Scanner
 from app.models.attendance import AttendanceRecord
 from app.models.schedule import Schedule, EmployeeSchedule, LeaveType, LeaveRequest
@@ -375,6 +375,112 @@ class TestAttendanceRecordModel:
         
         assert record.is_late is True
         assert record.late_duration_min == 15
+
+
+class TestStatusLogModel:
+    """
+    Test suite for StatusLog model — the audit backbone for "active hours" tracking.
+    """
+
+    @pytest.mark.unit
+    def test_status_log_instantiation(self):
+        """StatusLog should instantiate with required fields."""
+        emp_id = uuid4()
+        now = datetime.now(timezone.utc)
+
+        log = StatusLog(
+            employee_id=emp_id,
+            from_status="OUTSIDE",
+            to_status="ACTIVE",
+            source="BIOMETRIC",
+            changed_at=now,
+        )
+
+        assert log.employee_id == emp_id
+        assert log.from_status == "OUTSIDE"
+        assert log.to_status == "ACTIVE"
+        assert log.source == "BIOMETRIC"
+        assert log.changed_at == now
+
+    @pytest.mark.unit
+    def test_status_log_first_entry_null_from_status(self):
+        """First-ever status log entry may have no from_status (NULL is valid)."""
+        log = StatusLog(
+            employee_id=uuid4(),
+            from_status=None,
+            to_status="ACTIVE",
+            source="BIOMETRIC",
+            changed_at=datetime.now(timezone.utc),
+        )
+
+        assert log.from_status is None
+        assert log.to_status == "ACTIVE"
+
+    @pytest.mark.unit
+    def test_status_log_sources(self):
+        """StatusLog should accept all valid source types."""
+        valid_sources = ["BIOMETRIC", "MANUAL", "CALENDAR_SYNC", "AUTO_CONFIRM", "SYSTEM"]
+        now = datetime.now(timezone.utc)
+
+        for source in valid_sources:
+            log = StatusLog(
+                employee_id=uuid4(),
+                from_status="ACTIVE",
+                to_status="IN_MEETING",
+                source=source,
+                changed_at=now,
+            )
+            assert log.source == source
+
+    @pytest.mark.unit
+    def test_status_log_all_status_transitions(self):
+        """StatusLog should record all valid occupancy status transitions."""
+        statuses = list(OCCUPANCY_STATUSES)
+        now = datetime.now(timezone.utc)
+
+        for i in range(len(statuses) - 1):
+            log = StatusLog(
+                employee_id=uuid4(),
+                from_status=statuses[i],
+                to_status=statuses[i + 1],
+                source="BIOMETRIC",
+                changed_at=now,
+            )
+            assert log.from_status == statuses[i]
+            assert log.to_status == statuses[i + 1]
+
+    @pytest.mark.unit
+    def test_status_log_with_scan_event_link(self):
+        """StatusLog should optionally link to the triggering scan event."""
+        scan_id = uuid4()
+        log = StatusLog(
+            employee_id=uuid4(),
+            from_status="OUTSIDE",
+            to_status="ACTIVE",
+            source="BIOMETRIC",
+            changed_at=datetime.now(timezone.utc),
+            scan_event_id=scan_id,
+        )
+
+        assert log.scan_event_id == scan_id
+
+    @pytest.mark.unit
+    def test_status_log_repr(self):
+        """StatusLog __repr__ should include key fields."""
+        emp_id = uuid4()
+        now = datetime.now(timezone.utc)
+        log = StatusLog(
+            employee_id=emp_id,
+            from_status="ACTIVE",
+            to_status="ON_BREAK",
+            source="MANUAL",
+            changed_at=now,
+        )
+
+        repr_str = repr(log)
+        assert "ACTIVE" in repr_str
+        assert "ON_BREAK" in repr_str
+        assert "MANUAL" in repr_str
 
 
 class TestScheduleModel:
