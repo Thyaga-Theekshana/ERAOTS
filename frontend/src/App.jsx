@@ -24,6 +24,7 @@ import MyAttendancePage from './pages/MyAttendancePage';
 import MySchedulePage from './pages/MySchedulePage';
 import TeamPage from './pages/TeamPage';
 import DevToolsPage from './pages/DevToolsPage';
+import HardwareMonitoringPage from './pages/HardwareMonitoringPage';
 import PlaceholderPage from './pages/PlaceholderPage';
 import './styles/index.css';
 
@@ -145,6 +146,14 @@ function App() {
                   <ScannersPage />
                 </RoleRoute>
               } />
+              
+              {/* Hardware Health Monitoring - NEW */}
+              <Route path="hardware" element={
+                <RoleRoute allowedRoles={['HR_MANAGER', 'SUPER_ADMIN']}>
+                  <HardwareMonitoringPage />
+                </RoleRoute>
+              } />
+              
               <Route path="emergency" element={
                 <RoleRoute allowedRoles={['HR_MANAGER', 'SUPER_ADMIN']}>
                   <EmergencyPage />
