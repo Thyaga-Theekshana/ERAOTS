@@ -433,3 +433,99 @@ class ActionableNotificationResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+        
+# ==================== HARDWARE / FR13 ====================
+
+class ScannerCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    door_name: str = Field(..., min_length=1, max_length=100)
+    location_description: Optional[str] = None
+    heartbeat_interval_sec: Optional[int] = 60
+
+class ScannerResponse(BaseModel):
+    scanner_id: UUID
+    name: str
+    door_name: str
+    location_description: Optional[str] = None
+    status: str  # ONLINE, DEGRADED, OFFLINE
+    last_heartbeat: Optional[datetime] = None
+    api_key: Optional[str] = None  # Only on creation
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class ScannerHeartbeatRequest(BaseModel):
+    """Device sends heartbeat with performance metrics."""
+    response_time_ms: Optional[int] = None
+    error_message: Optional[str] = None
+    buffer_size: Optional[int] = 0  # Number of buffered events
+
+
+class ScannerHeartbeatResponse(BaseModel):
+    scanner_id: UUID
+    status: str
+    message: str
+    server_time: datetime
+
+
+class ScannerHealthResponse(BaseModel):
+    """Current health snapshot of a scanner."""
+    scanner_id: UUID
+    name: str
+    door_name: str
+    status: str
+    last_heartbeat: Optional[datetime] = None
+    uptime_percentage: float
+    error_rate_pct: float
+    total_scans: int = 0
+    failed_scans: int = 0
+    installed_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class ScannerHealthHistoryResponse(BaseModel):
+    """Historical health log entry."""
+    log_id: UUID
+    scanner_id: UUID
+    status: str
+    response_time_ms: Optional[int] = None
+    error_message: Optional[str] = None
+    checked_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class BufferedEventData(BaseModel):
+    """Single event from device buffer."""
+    fingerprint_id: str
+    timestamp: datetime
+    direction: str  # IN, OUT
+
+
+class ScannerBufferSyncRequest(BaseModel):
+    """Device syncs buffered events while offline."""
+    events: List[BufferedEventData] = []
+    buffer_clear_requested: bool = False
+
+
+class BufferConflict(BaseModel):
+    """Conflict detected during buffer sync."""
+    event_index: int
+    reason: str  # DUPLICATE, VALIDATION_FAILED, etc.
+
+
+class ScannerBufferSyncResponse(BaseModel):
+    """Result of buffer sync operation."""
+    scanner_id: UUID
+    events_received: int
+    events_processed: int
+    conflicts_detected: int
+    conflicts: List[BufferConflict] = []
+    message: str

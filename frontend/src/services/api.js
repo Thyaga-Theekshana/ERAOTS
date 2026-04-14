@@ -249,3 +249,14 @@ export const createDashboardSocket = (onMessage) => {
 };
 
 export default api;
+
+
+// ==================== HARDWARE (FR13) ====================
+export const hardwareAPI = {
+  getHealth: () => api.get('/api/scanners/health'),
+  getHealthHistory: (scannerId) => api.get(`/api/scanners/${scannerId}/health-history`),
+  register: (data) => api.post('/api/scanners', data),
+  list: () => api.get('/api/scanners'),
+  sendHeartbeat: (scannerId, data) => api.post(`/api/scanners/${scannerId}/heartbeat`, data),
+  syncBuffer: (scannerId, data) => api.post(`/api/scanners/${scannerId}/buffer-sync`, data),
+};

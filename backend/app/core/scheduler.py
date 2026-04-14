@@ -21,6 +21,8 @@ from app.models.notifications import Notification
 from app.core.calendar_sync import poll_all_calendars
 from app.core.jira_sync import sync_all_jira_productivity
 
+from app.core.hardware_monitor import HardwareMonitorService
+
 logger = logging.getLogger("eraots.scheduler")
 
 SCHEDULER_INTERVAL_SECONDS = 60  # Run every 60 seconds
@@ -270,6 +272,15 @@ async def run_scheduler():
                 # Run every 10 minutes
                 if int(datetime.now(timezone.utc).timestamp()) % 600 < 60:
                     await sync_all_jira_productivity(db)
+
+                # Job 6: Monitor hardware health (every 2 minutes)
+                if int(datetime.now(timezone.utc).timestamp()) % 120 < 60:
+                    try:
+                        summary = await HardwareMonitorService.monitor_all_scanners(db)
+                        if summary["status_changes"]:
+                            logger.info(f"Hardware status changes: {len(summary['status_changes'])} scanner(s)")
+                    except Exception as e:
+                        logger.error(f"Hardware monitor error: {e}", exc_info=True)
 
         except asyncio.CancelledError:
             logger.info("Scheduler shutting down...")
