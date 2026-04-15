@@ -115,6 +115,7 @@ export const leaveAPI = {
   listRequests: (status) => api.get('/api/schedules/leave-requests', { params: { status } }),
   myRequests: () => api.get('/api/schedules/leave-requests/my'),
   getUsage: (year) => api.get('/api/schedules/leave-usage', { params: { year } }),
+  getBalance: (year) => api.get('/api/schedules/leave-balance', { params: { year } }),
   getCalendar: (month) => api.get('/api/schedules/leave-calendar', { params: { month } }),
   updateStatus: (id, status_val, comment) => api.put(`/api/schedules/leave-requests/${id}/status`, null, { params: { status: status_val, comment } })
 };

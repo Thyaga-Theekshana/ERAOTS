@@ -102,6 +102,59 @@ async def get_leave_types(db: AsyncSession = Depends(get_db)):
     return [{"leave_type_id": str(t.leave_type_id), "name": t.name} for t in types]
 
 
+@router.get("/leave-balance")
+async def get_leave_balance(
+    db: AsyncSession = Depends(get_db),
+    current_user: UserAccount = Depends(get_current_user),
+    year: Optional[int] = None
+):
+    """Get current employee's leave balance (used vs remaining days by type)."""
+    year = year or date.today().year
+    
+    # Get all leave types
+    leave_types = (await db.execute(select(LeaveType))).scalars().all()
+    
+    # Get approved leave requests for this employee in the given year
+    approved_leaves = (
+        await db.execute(
+            select(LeaveRequest)
+            .options(joinedload(LeaveRequest.leave_type))
+            .where(
+                LeaveRequest.employee_id == current_user.employee_id,
+                LeaveRequest.status == "APPROVED"
+            )
+        )
+    ).scalars().all()
+    
+    # Calculate used days per type
+    used_by_type = {}
+    for req in approved_leaves:
+        # Only count leaves that fall within or cross the specified year
+        if req.start_date.year <= year <= req.end_date.year or (req.start_date.year <= year and req.end_date.year >= year):
+            leave_id = req.leave_type_id
+            days = _leave_days(req.start_date, req.end_date)
+            used_by_type[leave_id] = used_by_type.get(leave_id, 0) + days
+    
+    # Build response
+    balance = []
+    for lt in leave_types:
+        used = used_by_type.get(lt.leave_type_id, 0)
+        remaining = None
+        if lt.max_days_per_year is not None:
+            remaining = max(0, lt.max_days_per_year - used)
+        
+        balance.append({
+            "leave_type_id": str(lt.leave_type_id),
+            "leave_type_name": lt.name,
+            "max_days": lt.max_days_per_year,
+            "used_days": used,
+            "remaining_days": remaining,
+            "is_paid": lt.is_paid
+        })
+    
+    return balance
+
+
 # ==================== LEAVE REQUESTS ====================
 
 @router.post("/leave-requests", response_model=LeaveRequestResponse)
