@@ -10,11 +10,26 @@ export default function EmergencyPage() {
   const [loading, setLoading] = useState(true);
   const [historyLoading, setHistoryLoading] = useState(false);
 
+  // Safety Check state
+  const [safetyCheck, setSafetyCheck] = useState(null);
+  const [safetyLoading, setSafetyLoading] = useState(false);
+  const [safetyFilter, setSafetyFilter] = useState('ALL');
+  const [sendingCheck, setSendingCheck] = useState(false);
+
   useEffect(() => {
     fetchActive();
     const interval = setInterval(fetchActive, 5000);
     return () => clearInterval(interval);
   }, []);
+
+  // Auto-refresh safety check data when emergency is active and safety check was sent
+  useEffect(() => {
+    if (activeEmergency?.safety_check_sent) {
+      fetchSafetyCheck(activeEmergency.emergency_id);
+      const interval = setInterval(() => fetchSafetyCheck(activeEmergency.emergency_id), 5000);
+      return () => clearInterval(interval);
+    }
+  }, [activeEmergency?.emergency_id, activeEmergency?.safety_check_sent]);
 
   const fetchActive = async () => {
     try {
@@ -24,6 +39,18 @@ export default function EmergencyPage() {
       console.error("Failed to fetch emergency state", err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchSafetyCheck = async (emergencyId) => {
+    try {
+      setSafetyLoading(true);
+      const res = await emergencyAPI.getSafetyCheck(emergencyId);
+      setSafetyCheck(res.data);
+    } catch (err) {
+      console.error("Failed to fetch safety check", err);
+    } finally {
+      setSafetyLoading(false);
     }
   };
 
@@ -62,6 +89,7 @@ export default function EmergencyPage() {
     try {
       await emergencyAPI.resolve(activeEmergency.emergency_id);
       setActiveEmergency(null);
+      setSafetyCheck(null);
     } catch (err) {
       alert("Failed to resolve emergency");
     }
@@ -81,6 +109,21 @@ export default function EmergencyPage() {
     }
   };
 
+  const handleSendSafetyCheck = async () => {
+    if (!activeEmergency) return;
+    if (!window.confirm("This will send an 'Are you safe?' notification to ALL employees. Continue?")) return;
+    try {
+      setSendingCheck(true);
+      await emergencyAPI.sendSafetyCheck(activeEmergency.emergency_id);
+      // Refresh emergency to get updated safety_check_sent flag
+      await fetchActive();
+    } catch (err) {
+      alert(err.response?.data?.detail || "Failed to send safety check");
+    } finally {
+      setSendingCheck(false);
+    }
+  };
+
   if (loading && !activeEmergency) {
     return (
       <div className="page-container">
@@ -95,6 +138,12 @@ export default function EmergencyPage() {
   const isAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'HR_MANAGER';
   const missingCount = activeEmergency?.headcount_entries?.filter(e => !e.accounted_for).length || 0;
   const safeCount = activeEmergency?.headcount_entries?.filter(e => e.accounted_for).length || 0;
+
+  // Filter safety check responses based on selected filter
+  const filteredResponses = safetyCheck?.responses?.filter(r => {
+    if (safetyFilter === 'ALL') return true;
+    return r.status === safetyFilter;
+  }) || [];
 
   return (
     <div className="page-container">
@@ -198,12 +247,24 @@ export default function EmergencyPage() {
                 </p>
               </div>
             </div>
-            {isAdmin && (
-              <button className="btn btn-ghost btn-resolve" onClick={handleResolve}>
-                <span className="material-symbols-outlined">check_circle</span>
-                Resolve Emergency
-              </button>
-            )}
+            <div className="emergency-banner-actions">
+              {isAdmin && !activeEmergency.safety_check_sent && (
+                <button
+                  className="btn safety-btn-send"
+                  onClick={handleSendSafetyCheck}
+                  disabled={sendingCheck}
+                >
+                  <span className="material-symbols-outlined">campaign</span>
+                  {sendingCheck ? 'Sending...' : 'Send "Are You Safe?"'}
+                </button>
+              )}
+              {isAdmin && (
+                <button className="btn btn-ghost btn-resolve" onClick={handleResolve}>
+                  <span className="material-symbols-outlined">check_circle</span>
+                  Resolve Emergency
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Stats Grid */}
@@ -221,6 +282,129 @@ export default function EmergencyPage() {
               <span className="emergency-stat-label">Accounted For</span>
             </div>
           </div>
+
+          {/* Safety Check Dashboard — shown after "Are you safe?" is sent */}
+          {activeEmergency.safety_check_sent && safetyCheck && (
+            <div className="safety-check-dashboard">
+              <div className="safety-check-header">
+                <div className="safety-check-header-left">
+                  <span className="material-symbols-outlined safety-check-header-icon">health_and_safety</span>
+                  <div>
+                    <h2 className="safety-check-title">Safety Check Responses</h2>
+                    <p className="safety-check-subtitle">Real-time employee safety status</p>
+                  </div>
+                </div>
+                {safetyLoading && <div className="loading-spinner loading-spinner--small"></div>}
+              </div>
+
+              {/* Safety Stats */}
+              <div className="safety-check-stats">
+                <div className="safety-check-stat safety-check-stat--safe">
+                  <span className="material-symbols-outlined">verified_user</span>
+                  <div className="safety-check-stat-info">
+                    <span className="safety-check-stat-value">{safetyCheck.safe_count}</span>
+                    <span className="safety-check-stat-label">Safe</span>
+                  </div>
+                </div>
+                <div className="safety-check-stat safety-check-stat--danger">
+                  <span className="material-symbols-outlined">emergency</span>
+                  <div className="safety-check-stat-info">
+                    <span className="safety-check-stat-value">{safetyCheck.in_danger_count}</span>
+                    <span className="safety-check-stat-label">In Danger</span>
+                  </div>
+                </div>
+                <div className="safety-check-stat safety-check-stat--pending">
+                  <span className="material-symbols-outlined">hourglass_top</span>
+                  <div className="safety-check-stat-info">
+                    <span className="safety-check-stat-value">{safetyCheck.pending_count}</span>
+                    <span className="safety-check-stat-label">No Response</span>
+                  </div>
+                </div>
+                <div className="safety-check-stat safety-check-stat--total">
+                  <span className="material-symbols-outlined">groups</span>
+                  <div className="safety-check-stat-info">
+                    <span className="safety-check-stat-value">{safetyCheck.total_employees}</span>
+                    <span className="safety-check-stat-label">Total</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Filter Tabs */}
+              <div className="safety-check-filters">
+                {['ALL', 'IN_DANGER', 'PENDING', 'SAFE'].map(filter => (
+                  <button
+                    key={filter}
+                    className={`safety-check-filter-btn ${safetyFilter === filter ? 'safety-check-filter-btn--active' : ''} ${filter === 'IN_DANGER' ? 'safety-check-filter-btn--danger' : ''}`}
+                    onClick={() => setSafetyFilter(filter)}
+                  >
+                    {filter === 'ALL' ? `All (${safetyCheck.total_employees})` :
+                     filter === 'IN_DANGER' ? `In Danger (${safetyCheck.in_danger_count})` :
+                     filter === 'PENDING' ? `No Response (${safetyCheck.pending_count})` :
+                     `Safe (${safetyCheck.safe_count})`}
+                  </button>
+                ))}
+              </div>
+
+              {/* Employee Response Table */}
+              <div className="table-wrapper">
+                <table className="premium-table">
+                  <thead>
+                    <tr>
+                      <th>Employee Name</th>
+                      <th>Department</th>
+                      <th>Email</th>
+                      <th>Phone</th>
+                      <th>Status</th>
+                      <th>Response Time</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredResponses.length === 0 ? (
+                      <tr>
+                        <td colSpan="6" style={{ textAlign: 'center', padding: '2rem', color: 'var(--secondary)' }}>
+                          No employees in this category
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredResponses.map(resp => (
+                        <tr
+                          key={resp.id}
+                          className={
+                            resp.status === 'IN_DANGER' ? 'safety-row-danger' :
+                            resp.status === 'PENDING' ? 'safety-row-pending' :
+                            'safety-row-safe'
+                          }
+                        >
+                          <td>
+                            <span className="table-cell-name">{resp.employee_name}</span>
+                          </td>
+                          <td>{resp.department_name || '—'}</td>
+                          <td>{resp.email || '—'}</td>
+                          <td>{resp.phone || '—'}</td>
+                          <td>
+                            <span className={`safety-status-badge safety-status-badge--${resp.status.toLowerCase().replace('_', '-')}`}>
+                              <span className="material-symbols-outlined">
+                                {resp.status === 'SAFE' ? 'verified_user' :
+                                 resp.status === 'IN_DANGER' ? 'warning' : 'hourglass_top'}
+                              </span>
+                              {resp.status === 'IN_DANGER' ? 'IN DANGER' : resp.status}
+                            </span>
+                          </td>
+                          <td>
+                            <span className="table-cell-time">
+                              {resp.responded_at
+                                ? new Date(resp.responded_at).toLocaleTimeString()
+                                : '—'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
 
           {/* Muster Checklist */}
           <div className="table-card-premium emergency-table">

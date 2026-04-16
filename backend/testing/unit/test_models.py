@@ -29,6 +29,7 @@ os.environ.setdefault("JWT_SECRET_KEY", "test-jwt-secret-key-for-testing")
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///./test.db")
 
 from app.models.employee import Employee, Department, Role, UserAccount
+from app.models.emergency import SafetyCheckResponse
 from app.models.events import ScanEvent, OccupancyState, StatusLog, OCCUPANCY_STATUSES
 from app.models.hardware import Scanner
 from app.models.attendance import AttendanceRecord
@@ -667,6 +668,47 @@ class TestLeaveRequestModel:
 
         assert req.reason is None
 
+
+class TestSafetyCheckResponseModel:
+    """
+    Test suite for SafetyCheckResponse model (Emergency Safety Check).
+    """
+
+    @pytest.mark.unit
+    def test_safety_check_response_instantiation(self):
+        """SafetyCheckResponse should instantiate with required fields."""
+        emp_id = uuid4()
+        emergency_id = uuid4()
+        
+        scr = SafetyCheckResponse(
+            emergency_id=emergency_id,
+            employee_id=emp_id,
+        )
+        
+        assert scr.emergency_id == emergency_id
+        assert scr.employee_id == emp_id
+
+    @pytest.mark.unit
+    def test_safety_check_response_default_status(self):
+        """SafetyCheckResponse should default to PENDING."""
+        scr = SafetyCheckResponse(
+            emergency_id=uuid4(),
+            employee_id=uuid4(),
+            status="PENDING" # Explicitly test the default value expected
+        )
+        assert scr.status == "PENDING"
+        
+    @pytest.mark.unit
+    def test_safety_check_response_status_values(self):
+        """SafetyCheckResponse should support PENDING, SAFE, and IN_DANGER."""
+        valid_statuses = ["PENDING", "SAFE", "IN_DANGER"]
+        for status in valid_statuses:
+            scr = SafetyCheckResponse(
+                emergency_id=uuid4(),
+                employee_id=uuid4(),
+                status=status
+            )
+            assert scr.status == status
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

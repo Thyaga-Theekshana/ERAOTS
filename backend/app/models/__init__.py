@@ -17,7 +17,7 @@ from app.models.schedule import Schedule, EmployeeSchedule, LeaveType, LeaveRequ
 from app.models.notifications import Notification, NotificationPreference
 from app.models.corrections import CorrectionRequest
 from app.models.policies import Policy
-from app.models.emergency import EmergencyEvent, EmergencyHeadcount
+from app.models.emergency import EmergencyEvent, EmergencyHeadcount, SafetyCheckResponse
 from app.models.hardware import Scanner, ScannerHealthLog
 from app.models.audit import AuditLog
 
@@ -30,7 +30,7 @@ __all__ = [
     "Notification", "NotificationPreference",
     "CorrectionRequest",
     "Policy",
-    "EmergencyEvent", "EmergencyHeadcount",
+    "EmergencyEvent", "EmergencyHeadcount", "SafetyCheckResponse",
     "Scanner", "ScannerHealthLog",
     "AuditLog",
 ]

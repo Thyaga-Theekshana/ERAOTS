@@ -8735,3 +8735,456 @@ tbody tr:hover {
     width: 100%;
   }
 }
+
+/* ==================== SAFETY CHECK — Admin Dashboard ==================== */
+
+.safety-check-dashboard {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-2xl);
+  padding: 2rem;
+  margin-bottom: 2rem;
+}
+
+.safety-check-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+}
+
+.safety-check-header-left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.safety-check-header-icon {
+  font-size: 2rem;
+  color: var(--primary);
+  font-variation-settings: 'FILL' 1;
+}
+
+.safety-check-title {
+  font-family: var(--font-headline);
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--on-surface);
+}
+
+.safety-check-subtitle {
+  font-size: 0.8125rem;
+  color: var(--secondary);
+  margin-top: 0.125rem;
+}
+
+.loading-spinner--small {
+  width: 20px;
+  height: 20px;
+  border-width: 2px;
+}
+
+/* Safety Check Stats */
+.safety-check-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.safety-check-stat {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--glass-border);
+  transition: all 0.3s ease;
+}
+
+.safety-check-stat .material-symbols-outlined {
+  font-size: 1.75rem;
+  font-variation-settings: 'FILL' 1;
+}
+
+.safety-check-stat-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.safety-check-stat-value {
+  font-family: var(--font-headline);
+  font-size: 1.75rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.safety-check-stat-label {
+  font-family: var(--font-headline);
+  font-size: 0.625rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: var(--secondary);
+  margin-top: 0.25rem;
+}
+
+.safety-check-stat--safe {
+  background: rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.25);
+}
+.safety-check-stat--safe .material-symbols-outlined,
+.safety-check-stat--safe .safety-check-stat-value {
+  color: #10b981;
+}
+
+.safety-check-stat--danger {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.25);
+  animation: safety-pulse 2s ease-in-out infinite;
+}
+.safety-check-stat--danger .material-symbols-outlined,
+.safety-check-stat--danger .safety-check-stat-value {
+  color: #ef4444;
+}
+
+.safety-check-stat--pending {
+  background: rgba(245, 158, 11, 0.1);
+  border-color: rgba(245, 158, 11, 0.25);
+}
+.safety-check-stat--pending .material-symbols-outlined,
+.safety-check-stat--pending .safety-check-stat-value {
+  color: #f59e0b;
+}
+
+.safety-check-stat--total {
+  background: var(--surface-container);
+  border-color: var(--glass-border);
+}
+.safety-check-stat--total .material-symbols-outlined {
+  color: var(--secondary);
+}
+.safety-check-stat--total .safety-check-stat-value {
+  color: var(--on-surface);
+}
+
+@keyframes safety-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.2); }
+  50% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
+}
+
+/* Safety Check Filters */
+.safety-check-filters {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.safety-check-filter-btn {
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--secondary);
+  font-family: var(--font-headline);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.safety-check-filter-btn:hover {
+  background: var(--surface-container-high);
+  color: var(--on-surface);
+}
+
+.safety-check-filter-btn--active {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+}
+
+.safety-check-filter-btn--danger.safety-check-filter-btn--active {
+  background: #ef4444;
+  border-color: #ef4444;
+}
+
+/* Safety Table Row States */
+.safety-row-danger {
+  background: rgba(239, 68, 68, 0.08) !important;
+  border-left: 3px solid #ef4444;
+}
+
+.safety-row-pending {
+  background: rgba(245, 158, 11, 0.06) !important;
+  border-left: 3px solid #f59e0b;
+}
+
+.safety-row-safe {
+  background: rgba(16, 185, 129, 0.06) !important;
+  border-left: 3px solid #10b981;
+}
+
+/* Safety Status Badge */
+.safety-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: var(--radius-full);
+  font-family: var(--font-headline);
+  font-size: 0.625rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.safety-status-badge .material-symbols-outlined {
+  font-size: 0.875rem;
+}
+
+.safety-status-badge--safe {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+}
+
+.safety-status-badge--in-danger {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  animation: safety-badge-pulse 1.5s ease-in-out infinite;
+}
+
+.safety-status-badge--pending {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+}
+
+@keyframes safety-badge-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+/* Send Safety Check Button */
+.safety-btn-send {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: var(--radius-lg);
+  font-family: var(--font-headline);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 16px rgba(245, 158, 11, 0.3);
+}
+
+.safety-btn-send:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(245, 158, 11, 0.4);
+}
+
+.safety-btn-send:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.emergency-banner-actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+/* ==================== SAFETY CHECK — Employee Notification ==================== */
+
+.safety-notification-card {
+  border-radius: var(--radius-xl);
+  padding: 1.5rem;
+  margin-bottom: 0.75rem;
+  transition: all 0.3s ease;
+}
+
+.safety-notification-card--active {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.12), rgba(245, 158, 11, 0.08));
+  border: 2px solid rgba(239, 68, 68, 0.35);
+  box-shadow: 0 4px 24px rgba(239, 68, 68, 0.15);
+  animation: safety-card-glow 2s ease-in-out infinite;
+}
+
+.safety-notification-card--responded {
+  background: var(--surface-container);
+  border: 1px solid var(--glass-border);
+}
+
+@keyframes safety-card-glow {
+  0%, 100% { box-shadow: 0 4px 24px rgba(239, 68, 68, 0.15); }
+  50% { box-shadow: 0 4px 32px rgba(239, 68, 68, 0.3); }
+}
+
+.safety-notification-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.safety-notification-icon-wrap {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-lg);
+  background: rgba(239, 68, 68, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.safety-notification-icon {
+  font-size: 1.5rem;
+  color: #ef4444;
+  font-variation-settings: 'FILL' 1;
+}
+
+.safety-notification-info {
+  flex: 1;
+}
+
+.safety-notification-title {
+  font-family: var(--font-headline);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--on-surface);
+}
+
+.safety-notification-time {
+  font-size: 0.75rem;
+  color: var(--secondary);
+}
+
+.safety-notification-message {
+  font-size: 0.9375rem;
+  color: var(--on-surface);
+  margin-bottom: 1.25rem;
+  line-height: 1.5;
+}
+
+.safety-notification-actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.safety-btn-safe {
+  flex: 1;
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: white;
+  border: none;
+  padding: 0.875rem 1.5rem;
+  border-radius: var(--radius-lg);
+  font-family: var(--font-headline);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 16px rgba(16, 185, 129, 0.3);
+}
+
+.safety-btn-safe:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(16, 185, 129, 0.4);
+}
+
+.safety-btn-safe:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.safety-btn-danger {
+  flex: 1;
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: white;
+  border: none;
+  padding: 0.875rem 1.5rem;
+  border-radius: var(--radius-lg);
+  font-family: var(--font-headline);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 16px rgba(239, 68, 68, 0.3);
+}
+
+.safety-btn-danger:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(239, 68, 68, 0.4);
+}
+
+.safety-btn-danger:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Safety Response Confirmation */
+.safety-notification-responded {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  border-radius: var(--radius-lg);
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.safety-notification-responded .material-symbols-outlined {
+  font-size: 1.5rem;
+  font-variation-settings: 'FILL' 1;
+  flex-shrink: 0;
+}
+
+.safety-notification-responded--safe {
+  background: rgba(16, 185, 129, 0.12);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.25);
+}
+
+.safety-notification-responded--danger {
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+/* Safety Check Responsive */
+@media (max-width: 768px) {
+  .safety-check-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .safety-notification-actions {
+    flex-direction: column;
+  }
+
+  .safety-check-filters {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .emergency-banner-actions {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+}
