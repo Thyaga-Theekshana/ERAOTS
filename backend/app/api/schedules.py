@@ -3,18 +3,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 from typing import List, Optional
-from datetime import date
+from datetime import date, datetime, timezone
 import uuid
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user, require_roles
 from app.models.employee import UserAccount, Department
-from app.models.schedule import LeaveRequest, LeaveType, Schedule, EmployeeSchedule
+from app.models.schedule import LeaveRequest, LeaveType, Schedule, EmployeeSchedule, Holiday
 from app.api.schemas import (
     LeaveRequestCreate,
     LeaveRequestResponse,
     LeaveUsageSummary,
     LeaveCalendarEntry,
+    LeaveHolidayEntry,
     MessageResponse
 )
 
@@ -196,6 +197,8 @@ async def submit_leave_request(
         end_date=saved_req.end_date,
         status=saved_req.status,
         reason=saved_req.reason,
+        review_comment=saved_req.review_comment,
+        reviewed_at=saved_req.reviewed_at,
         created_at=saved_req.created_at
     )
 
@@ -226,6 +229,8 @@ async def get_my_leave_requests(
             end_date=r.end_date,
             status=r.status,
             reason=r.reason,
+            review_comment=r.review_comment,
+            reviewed_at=r.reviewed_at,
             created_at=r.created_at
         ) for r in results
     ]
@@ -265,6 +270,8 @@ async def list_leave_requests(
             end_date=r.end_date,
             status=r.status,
             reason=r.reason,
+            review_comment=r.review_comment,
+            reviewed_at=r.reviewed_at,
             created_at=r.created_at
         ) for r in results
     ]
@@ -371,6 +378,45 @@ async def get_leave_calendar(
     ]
 
 
+@router.get("/leave-holidays", response_model=List[LeaveHolidayEntry])
+async def get_leave_holidays(
+    month: Optional[str] = Query(default=None, description="Format: YYYY-MM"),
+    db: AsyncSession = Depends(get_db),
+    current_user: UserAccount = Depends(get_current_user),
+):
+    """List company holidays for leave calendar overlays."""
+    if month:
+        try:
+            parts = month.split("-")
+            year = int(parts[0])
+            mon = int(parts[1])
+            start = date(year, mon, 1)
+            end = date(year + (1 if mon == 12 else 0), 1 if mon == 12 else mon + 1, 1)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid month format. Use YYYY-MM")
+    else:
+        today = date.today()
+        start = date(today.year, today.month, 1)
+        end = date(today.year + (1 if today.month == 12 else 0), 1 if today.month == 12 else today.month + 1, 1)
+
+    rows = (
+        await db.execute(
+            select(Holiday)
+            .where(Holiday.holiday_date >= start, Holiday.holiday_date < end)
+            .order_by(Holiday.holiday_date.asc())
+        )
+    ).scalars().all()
+
+    return [
+        LeaveHolidayEntry(
+            holiday_id=h.holiday_id,
+            name=h.name,
+            holiday_date=h.holiday_date,
+        )
+        for h in rows
+    ]
+
+
 @router.put("/leave-requests/{request_id}/status", response_model=MessageResponse)
 async def update_leave_status(
     request_id: uuid.UUID,
@@ -396,6 +442,7 @@ async def update_leave_status(
     req.status = status
     req.reviewed_by = current_user.employee_id
     req.review_comment = comment
+    req.reviewed_at = datetime.now(timezone.utc)
     await db.flush()
     
     # Needs to notify the user
@@ -413,3 +460,32 @@ async def update_leave_status(
         )
     
     return MessageResponse(message=f"Leave request has been {status.lower()}")
+
+
+@router.put("/leave-requests/{request_id}/cancel", response_model=MessageResponse)
+async def cancel_my_leave_request(
+    request_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserAccount = Depends(get_current_user),
+):
+    """Cancel a pending leave request owned by the current user."""
+    result = await db.execute(
+        select(LeaveRequest).where(
+            LeaveRequest.leave_id == request_id,
+            LeaveRequest.employee_id == current_user.employee_id,
+        )
+    )
+    req = result.scalar_one_or_none()
+
+    if not req:
+        raise HTTPException(status_code=404, detail="Leave request not found")
+
+    if req.status != "PENDING":
+        raise HTTPException(status_code=400, detail="Only pending leave requests can be cancelled")
+
+    req.status = "CANCELLED"
+    req.review_comment = "Cancelled by employee"
+    req.reviewed_at = datetime.now(timezone.utc)
+    await db.flush()
+
+    return MessageResponse(message="Leave request cancelled successfully")

@@ -8485,6 +8485,12 @@ tbody tr:hover {
   cursor: not-allowed;
 }
 
+.calendar-day--holiday {
+  border-color: #0ea5e9;
+  background: rgba(14, 165, 233, 0.08);
+  cursor: not-allowed;
+}
+
 .calendar-day--empty {
   background: transparent;
   cursor: default;
@@ -8495,6 +8501,19 @@ tbody tr:hover {
   font-size: 0.9375rem;
   font-weight: 600;
   color: var(--on-surface);
+}
+
+.calendar-holiday-pill {
+  font-size: 0.625rem;
+  font-weight: 600;
+  color: #0369a1;
+  background: rgba(14, 165, 233, 0.2);
+  border-radius: var(--radius-sm);
+  padding: 0.125rem 0.375rem;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .calendar-day-leaves {
@@ -8519,6 +8538,10 @@ tbody tr:hover {
 
 .leave-indicator--rejected {
   background: #ef4444;
+}
+
+.leave-indicator--cancelled {
+  background: #6b7280;
 }
 
 /* ==================== LEAVE REQUESTS LIST ==================== */
@@ -8569,6 +8592,11 @@ tbody tr:hover {
   background: rgba(239, 68, 68, 0.08);
 }
 
+.request-item--cancelled {
+  border-left-color: #6b7280;
+  background: rgba(107, 114, 128, 0.12);
+}
+
 .request-header {
   display: flex;
   justify-content: space-between;
@@ -8604,6 +8632,11 @@ tbody tr:hover {
   color: #ef4444;
 }
 
+.request-status--cancelled {
+  background: rgba(107, 114, 128, 0.2);
+  color: #4b5563;
+}
+
 .request-dates {
   display: flex;
   align-items: center;
@@ -8614,6 +8647,45 @@ tbody tr:hover {
 
 .request-dates .material-symbols-outlined {
   font-size: 1rem;
+}
+
+.request-reason,
+.request-comment {
+  margin-top: 0.5rem;
+  font-size: 0.8125rem;
+  color: var(--secondary);
+}
+
+.request-actions {
+  margin-top: 0.75rem;
+}
+
+.request-cancel-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 0.375rem 0.625rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #b91c1c;
+  background: rgba(239, 68, 68, 0.12);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.request-cancel-btn:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.2);
+}
+
+.request-cancel-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.request-cancel-btn .material-symbols-outlined {
+  font-size: 0.95rem;
 }
 
 /* ==================== MODAL STYLES ==================== */

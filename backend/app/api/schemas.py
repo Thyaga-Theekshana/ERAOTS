@@ -257,6 +257,8 @@ class LeaveRequestResponse(BaseModel):
     end_date: date
     status: str
     reason: Optional[str] = None
+    review_comment: Optional[str] = None
+    reviewed_at: Optional[datetime] = None
     created_at: datetime
 
     class Config:
@@ -280,6 +282,11 @@ class LeaveCalendarEntry(BaseModel):
     start_date: date
     end_date: date
     status: str
+
+class LeaveHolidayEntry(BaseModel):
+    holiday_id: UUID
+    name: str
+    holiday_date: date
 
 
 # ==================== PHASE C: CORRECTIONS ====================
