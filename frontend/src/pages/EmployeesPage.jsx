@@ -32,7 +32,8 @@ export default function EmployeesPage() {
   
   const initialForm = {
     first_name: '', last_name: '', email: '', phone: '',
-    department_id: '', fingerprint_id: '', role_name: 'EMPLOYEE', password: ''
+    department_id: '', fingerprint_id: '', role_name: 'EMPLOYEE',
+    job_title: '', password: ''
   };
   const [formData, setFormData] = useState(initialForm);
 
@@ -463,6 +464,7 @@ export default function EmployeesPage() {
                     onChange={e => setFormData({...formData, role_name: e.target.value})}
                   >
                     <option value="EMPLOYEE">Employee</option>
+                    <option value="MANAGER">Department Manager</option>
                     <option value="HR_MANAGER">HR Manager</option>
                     <option value="SUPER_ADMIN">Super Admin</option>
                   </select>
@@ -493,6 +495,20 @@ export default function EmployeesPage() {
                   />
                 </div>
               </div>
+
+              <div className="modal-form-grid">
+                <div className="modal-field">
+                  <label className="modal-label">Job Title</label>
+                  <input 
+                    type="text" 
+                    className="modal-input" 
+                    value={formData.job_title} 
+                    onChange={e => setFormData({...formData, job_title: e.target.value})} 
+                    placeholder="e.g. Software Engineer, QA Lead"
+                  />
+                </div>
+              </div>
+
 
               <div className="modal-actions">
                 <button type="button" className="modal-btn modal-btn--ghost" onClick={() => setIsModalOpen(false)}>

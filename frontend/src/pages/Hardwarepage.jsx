@@ -218,7 +218,7 @@ export default function HardwarePage() {
               </div>
 
               {/* Actions */}
-              <div className="card-footer" style={{ display: 'flex', gap: '8px' }}>
+              <div className="card-footer" style={{ display: 'flex', gap: '0.5rem' }}>
                 <button className="btn-secondary btn-sm" onClick={() => handleViewLogs(scanner.scanner_id)}>View Logs</button>
                 {scanner.status !== 'ONLINE' && (
                   <button className="btn-primary btn-sm" onClick={() => handleRestart(scanner.scanner_id)} disabled={actionLoading}>
@@ -231,32 +231,36 @@ export default function HardwarePage() {
         </div>
       )}
 
-      {/* Logs Modal */}
+      {/* Logs Modal — uses design-system hw-modal classes */}
       {logsModalOpen && (
-        <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-          <div className="glass bento-span-2 card" style={{ width: '600px', maxHeight: '80vh', overflowY: 'auto' }}>
-            <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3>Scanner Health History (Logs)</h3>
-              <button className="btn-ghost btn-sm" onClick={() => setLogsModalOpen(false)}>Close</button>
+        <div className="hw-modal-overlay" onClick={() => setLogsModalOpen(false)}>
+          <div className="hw-modal" onClick={e => e.stopPropagation()}>
+            <div className="hw-modal-header">
+              <span className="hw-modal-title">Scanner Health History</span>
+              <button className="btn-icon" onClick={() => setLogsModalOpen(false)}>
+                <span className="material-symbols-outlined">close</span>
+              </button>
             </div>
-            <div className="card-content">
-              {scannerLogs.length === 0 ? <p>No logs found. Or loading...</p> : (
-                <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse', fontSize: '12px' }}>
+            <div className="hw-modal-body">
+              {scannerLogs.length === 0 ? (
+                <p className="hw-logs-empty">No logs available for this scanner.</p>
+              ) : (
+                <table className="hw-logs-table">
                   <thead>
-                    <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                      <th style={{ padding: '8px' }}>Time</th>
-                      <th style={{ padding: '8px' }}>Status</th>
-                      <th style={{ padding: '8px' }}>Response Time</th>
-                      <th style={{ padding: '8px' }}>Error Details</th>
+                    <tr>
+                      <th>Time</th>
+                      <th>Status</th>
+                      <th>Response</th>
+                      <th>Details</th>
                     </tr>
                   </thead>
                   <tbody>
                     {scannerLogs.map(log => (
-                      <tr key={log.log_id} style={{ borderBottom: '1px solid var(--border)' }}>
-                        <td style={{ padding: '8px' }}>{new Date(log.checked_at).toLocaleString()}</td>
-                        <td style={{ padding: '8px', color: getStatusColor(log.status) }}>{log.status}</td>
-                        <td style={{ padding: '8px' }}>{log.response_time_ms ? `${log.response_time_ms}ms` : '-'}</td>
-                        <td style={{ padding: '8px' }}>{log.error_message || 'OK'}</td>
+                      <tr key={log.log_id}>
+                        <td>{new Date(log.checked_at).toLocaleString()}</td>
+                        <td style={{ color: getStatusColor(log.status) }}>{log.status}</td>
+                        <td>{log.response_time_ms ? `${log.response_time_ms}ms` : '—'}</td>
+                        <td>{log.error_message || 'OK'}</td>
                       </tr>
                     ))}
                   </tbody>
