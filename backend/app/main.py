@@ -43,23 +43,19 @@ async def lifespan(app: FastAPI):
         # Seed initial data
         await seed_initial_data()
     except Exception as e:
-             # Start background health monitoring scheduler
+        logger.error(f"Database initialization failed: {e}")
+        logger.warning("Server starting without database — some features will be unavailable")
+
+    # Start background health monitoring scheduler
     try:
-            from app.core.tasks import start_health_monitoring_scheduler
-            scheduler = await start_health_monitoring_scheduler()
-      # Shutdown
-    # Stop the scheduler if it's running
-    if hasattr(app.state, 'health_scheduler') and app.state.health_scheduler:
-        app.state.health_scheduler.shutdown()
-        logger.info("Health monitoring scheduler stopped")
-    if scheduler:
-                # Store in app state so we can stop it on shutdown
-                app.state.health_scheduler = scheduler
+        from app.core.tasks import start_health_monitoring_scheduler
+        scheduler = await start_health_monitoring_scheduler()
+        if scheduler:
+            # Store in app state so we can stop it on shutdown
+            app.state.health_scheduler = scheduler
     except Exception as e:
-    
-    logger.warning(f"Health monitoring scheduler not available: {e}")   
-    logger.error(f"Database initialization failed: {e}")
-    logger.warning("Server starting without database — some features will be unavailable")
+        logger.warning(f"Health monitoring scheduler not available: {e}")   
+        
     
     # Start background scheduler (FR2.3, FR2.5, FR2.6)
     from app.core.scheduler import run_scheduler
@@ -74,6 +70,12 @@ async def lifespan(app: FastAPI):
         await scheduler_task
     except asyncio.CancelledError:
         pass
+        
+    # Stop the health scheduler if it's running
+    if hasattr(app.state, 'health_scheduler') and app.state.health_scheduler:
+        app.state.health_scheduler.shutdown()
+        logger.info("Health monitoring scheduler stopped")
+        
     logger.info("ERAOTS shutting down...")
 
 

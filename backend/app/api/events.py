@@ -131,15 +131,46 @@ async def receive_scan_event(
     """
     scan_time = scan.timestamp or datetime.now(timezone.utc)
     
-    # Step 1: Validate scanner
-    scanner_result = await db.execute(
-        select(Scanner).where(Scanner.scanner_id == scan.scanner_id)
-    )
-    scanner = scanner_result.scalar_one_or_none()
-    if not scanner:
-        raise HTTPException(status_code=404, detail="Scanner not registered")
+    try:
+        # Step 1: Validate scanner
+        scanner_result = await db.execute(
+            select(Scanner).where(Scanner.scanner_id == scan.scanner_id)
+        )
+        scanner = scanner_result.scalar_one_or_none()
+        if not scanner:
+            raise HTTPException(status_code=404, detail="Scanner not registered")
+    except Exception as db_err:
+        if isinstance(db_err, HTTPException):
+            raise db_err
+        # PostgreSQL Outage detected! Fallback to NFR1.1 File buffering
+        logger.error(f"Database outage during biometric scan: {db_err}")
+        import os, json
+        buffer_file = "offline_scans_buffer.json"
+        try:
+            buffer_data = []
+            if os.path.exists(buffer_file):
+                with open(buffer_file, "r") as f:
+                    try:
+                        buffer_data = json.load(f)
+                    except: pass
+            
+            buffer_data.append({
+                "scanner_id": str(scan.scanner_id),
+                "fingerprint_id": scan.fingerprint_id,
+                "timestamp": scan_time.isoformat(),
+            })
+            with open(buffer_file, "w") as f:
+                json.dump(buffer_data, f)
+                
+            from fastapi.responses import JSONResponse
+            return JSONResponse(status_code=202, content={
+                "message": "Outage detected. Scan buffered natively.",
+                "is_valid": True
+            })
+        except Exception as IO_err:
+            raise HTTPException(status_code=500, detail=f"Catastrophic failure: {IO_err}")
     
-    # Step 2: Look up employee by fingerprint hash
+    # DB is online. Proceed with Step 2: Look up employee by fingerprint hash
     fp_hash = hash_fingerprint(scan.fingerprint_id)
     emp_result = await db.execute(
         select(Employee).where(Employee.fingerprint_hash == fp_hash)

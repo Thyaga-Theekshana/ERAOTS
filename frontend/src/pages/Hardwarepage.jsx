@@ -7,6 +7,10 @@ export default function HardwarePage() {
   const [scanners, setScanners] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [logsModalOpen, setLogsModalOpen] = useState(false);
+  const [selectedScannerId, setSelectedScannerId] = useState(null);
+  const [scannerLogs, setScannerLogs] = useState([]);
+  const [actionLoading, setActionLoading] = useState(false);
 
   useEffect(() => {
     loadScannerHealth();
@@ -27,6 +31,32 @@ export default function HardwarePage() {
       console.error('Failed to load scanner health:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleRestart = async (scannerId) => {
+    try {
+      setActionLoading(true);
+      await hardwareAPI.restart(scannerId);
+      // Optimistically update
+      setScanners(prev => prev.map(s => s.scanner_id === scannerId ? { ...s, status: 'DEGRADED' } : s));
+      alert('Restart signal transmitted successfully');
+    } catch (err) {
+      alert('Failed to transmit restart signal: ' + err.message);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleViewLogs = async (scannerId) => {
+    try {
+      setSelectedScannerId(scannerId);
+      setLogsModalOpen(true);
+      setScannerLogs([]); // clear old
+      const res = await hardwareAPI.getHealthHistory(scannerId);
+      setScannerLogs(res.data);
+    } catch (err) {
+      alert('Failed to fetch scanner logs: ' + err.message);
     }
   };
 
@@ -189,13 +219,51 @@ export default function HardwarePage() {
 
               {/* Actions */}
               <div className="card-footer" style={{ display: 'flex', gap: '8px' }}>
-                <button className="btn-secondary btn-sm">View Logs</button>
+                <button className="btn-secondary btn-sm" onClick={() => handleViewLogs(scanner.scanner_id)}>View Logs</button>
                 {scanner.status !== 'ONLINE' && (
-                  <button className="btn-primary btn-sm">Restart</button>
+                  <button className="btn-primary btn-sm" onClick={() => handleRestart(scanner.scanner_id)} disabled={actionLoading}>
+                    {actionLoading ? 'Restarting...' : 'Restart'}
+                  </button>
                 )}
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Logs Modal */}
+      {logsModalOpen && (
+        <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+          <div className="glass bento-span-2 card" style={{ width: '600px', maxHeight: '80vh', overflowY: 'auto' }}>
+            <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3>Scanner Health History (Logs)</h3>
+              <button className="btn-ghost btn-sm" onClick={() => setLogsModalOpen(false)}>Close</button>
+            </div>
+            <div className="card-content">
+              {scannerLogs.length === 0 ? <p>No logs found. Or loading...</p> : (
+                <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse', fontSize: '12px' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                      <th style={{ padding: '8px' }}>Time</th>
+                      <th style={{ padding: '8px' }}>Status</th>
+                      <th style={{ padding: '8px' }}>Response Time</th>
+                      <th style={{ padding: '8px' }}>Error Details</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {scannerLogs.map(log => (
+                      <tr key={log.log_id} style={{ borderBottom: '1px solid var(--border)' }}>
+                        <td style={{ padding: '8px' }}>{new Date(log.checked_at).toLocaleString()}</td>
+                        <td style={{ padding: '8px', color: getStatusColor(log.status) }}>{log.status}</td>
+                        <td style={{ padding: '8px' }}>{log.response_time_ms ? `${log.response_time_ms}ms` : '-'}</td>
+                        <td style={{ padding: '8px' }}>{log.error_message || 'OK'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>

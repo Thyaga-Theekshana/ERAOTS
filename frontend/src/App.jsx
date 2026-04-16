@@ -24,10 +24,9 @@ import MyAttendancePage from './pages/MyAttendancePage';
 import MySchedulePage from './pages/MySchedulePage';
 import TeamPage from './pages/TeamPage';
 import DevToolsPage from './pages/DevToolsPage';
-import HardwareMonitoringPage from './pages/HardwareMonitoringPage';
 import PlaceholderPage from './pages/PlaceholderPage';
 import './styles/index.css';
-import HardwarePage from './pages/HardwarePage';
+import HardwarePage from './pages/Hardwarepage';
 
 /**
  * Protected route wrapper — redirects to login if not authenticated.
@@ -70,20 +69,12 @@ function ProtectedRoute({ children }) {
  */
 function RoleRoute({ children, allowedRoles }) {
   const { user } = useAuth();
-  
+
   if (!allowedRoles.includes(user?.role)) {
     return <Navigate to="/" replace />;
   }
-  
+
   return children;
-}
-{
-  path: '/hardware',
-  element: (
-    <RoleRoute allowedRoles={['SUPER_ADMIN', 'HR_MANAGER', 'MANAGER']}>
-      <HardwarePage />
-    </RoleRoute>
-  ),
 }
 function App() {
   return (
@@ -105,12 +96,12 @@ function App() {
             >
               {/* Dashboard - everyone */}
               <Route index element={<DashboardPage />} />
-              
+
               {/* Employee personal pages */}
               <Route path="my-profile" element={<ProfilePage />} />
               <Route path="my-attendance" element={<MyAttendancePage />} />
               <Route path="my-schedule" element={<MySchedulePage />} />
-              
+
               {/* Manager team pages */}
               <Route path="team" element={
                 <RoleRoute allowedRoles={['MANAGER']}>
@@ -127,7 +118,7 @@ function App() {
                   <SchedulesPage departmentScoped />
                 </RoleRoute>
               } />
-              
+
               {/* Admin/HR pages */}
               <Route path="employees" element={
                 <RoleRoute allowedRoles={['HR_MANAGER', 'SUPER_ADMIN']}>
@@ -154,14 +145,14 @@ function App() {
                   <ScannersPage />
                 </RoleRoute>
               } />
-              
+
               {/* Hardware Health Monitoring - NEW */}
               <Route path="hardware" element={
                 <RoleRoute allowedRoles={['HR_MANAGER', 'SUPER_ADMIN']}>
-                  <HardwareMonitoringPage />
+                  <HardwarePage />
                 </RoleRoute>
               } />
-              
+
               <Route path="emergency" element={
                 <RoleRoute allowedRoles={['HR_MANAGER', 'SUPER_ADMIN']}>
                   <EmergencyPage />
@@ -177,17 +168,17 @@ function App() {
                   <SettingsPage />
                 </RoleRoute>
               } />
-              
+
               {/* Super Admin dev tools */}
               <Route path="dev-tools" element={
                 <RoleRoute allowedRoles={['SUPER_ADMIN']}>
                   <DevToolsPage />
                 </RoleRoute>
               } />
-              
+
               {/* Corrections - all roles but different views */}
               <Route path="corrections" element={<CorrectionsPage />} />
-              
+
               {/* Notifications - everyone */}
               <Route path="notifications" element={<NotificationsPage />} />
             </Route>

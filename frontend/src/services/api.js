@@ -142,19 +142,7 @@ export const emergencyAPI = {
   markAccounted: (headcountId) => api.put(`/api/emergency/headcount/${headcountId}/account`)
 };
 
-// ==================== HARDWARE SCANNERS ====================
-export const hardwareAPI = {
-  list: () => api.get('/api/scanners/'),
-  register: (data) => api.post('/api/scanners/', data)
-};
-
-// ==================== HARDWARE HEALTH MONITORING ====================
-export const hardwareMonitoringAPI = {
-  getAll: () => api.get('/api/hardware/scanners/health'),
-  getLogs: (scannerId, limit = 100) => api.get(`/api/hardware/scanners/${scannerId}/logs`, { params: { limit } }),
-  getStats: () => api.get('/api/hardware/scanners/stats/summary'),
-};
-
+// ==================== HARDWARE SCANNERS (See FR13 later in file) ====================
 
 // ==================== SYSTEM SETTINGS ====================
 export const settingsAPI = {
@@ -268,4 +256,5 @@ export const hardwareAPI = {
   list: () => api.get('/api/scanners'),
   sendHeartbeat: (scannerId, data) => api.post(`/api/scanners/${scannerId}/heartbeat`, data),
   syncBuffer: (scannerId, data) => api.post(`/api/scanners/${scannerId}/buffer-sync`, data),
+  restart: (scannerId) => api.post(`/api/scanners/${scannerId}/restart`),
 };

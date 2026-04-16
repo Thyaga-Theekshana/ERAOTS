@@ -421,6 +421,8 @@ npm run dev
 | Change `get_db()` behavior | Extend functionality in your endpoint instead |
 | Hardcode config values | Use `from app.core.config import settings` |
 | Change existing Pydantic field types | Add new optional fields instead |
+| **Commit raw English placeholders** | NEVER save a `.py` file that only contains plain English sentences. Use `#` comments or actual docstrings `"""..."""` to prevent raw SyntaxErrors on boot. |
+| **Break existing indentation blocks** | Python strictly enforces indentation. When adding code to a `try/except` block or function, seamlessly match the surrounding tabs/spaces exactly. |
 
 ### Frontend Mistakes
 | ❌ Don't | ✅ Do Instead |
@@ -434,6 +436,9 @@ npm run dev
 | Skip role-based route protection | Wrap with `<RoleRoute>` in `App.jsx` |
 | Create new service files | Add API calls to `services/api.js` |
 | Use Tailwind or utility classes | Use Vigilant Glass design system classes |
+| **Duplicate existing variables/exports** | ALWAYS `Ctrl+F` the file to check if `export const X` exists before pasting it at the bottom. |
+| **Paste floating JSX/Routes** | ALWAYS put `<Route>` components precisely inside the parent `<Routes>` tree. Floating JSX creates fatal syntax crashes. |
+| **Commit raw English placeholders** | NEVER save a `.js` or `.jsx` file that only contains plain English prose. It will permanently break the Vite compiler. |
 
 ### Database/Model Mistakes
 | ❌ Don't | ✅ Do Instead |
@@ -494,14 +499,19 @@ style(css): add alert notification card styles
 
 ### Pull Request Checklist (Manual)
 Before merging your branch:
-- [ ] Server starts without errors
-- [ ] Frontend builds without errors (`npm run build`)
+- [ ] **NEVER `git commit -a` blindly.** Use `git status` to ensure you aren't committing `venv`, `node_modules`, `.env`, or build artifacts. 
+- [ ] Server starts without errors (`uvicorn` natively boots)
+- [ ] Frontend builds without errors (`npm run build` exits 0)
 - [ ] You can log in as admin
 - [ ] Dashboard loads with data
 - [ ] The feature you added works
 - [ ] All pre-existing pages still render
-- [ ] Light/dark mode still works
+- [ ] No `duplicate declaration` or `Expression expected` syntax errors exist
 - [ ] No console errors in browser dev tools
+
+### ☢️ FATAL GIT TRAPS TO AVOID
+**Committing Virtual Environments:** The most catastrophic error a contributor can make is pushing `backend/venv/` into Git. This uploads millions of lines of local OS binary files (like your local `python.exe`) which instantly breaks the repository for everyone else trying to run the server. 
+**Rule:** Ensure `.gitignore` is universally respected. If you see `venv/` or `node_modules/` in your `git status` payload, STOP. Do not commit!
 
 ---
 
