@@ -64,6 +64,13 @@ export default function MySchedulePage() {
           <h1 className="page-title-premium">My Schedule</h1>
           <p className="page-subtitle-premium">View your work schedule and manage leave requests</p>
         </div>
+        <button
+          className="btn btn-primary"
+          onClick={() => setActiveTab('calendar')}
+        >
+          <span className="material-symbols-outlined">calendar_month</span>
+          Leave Request
+        </button>
       </header>
 
       {/* Tab Navigation */}
