@@ -1,0 +1,1 @@
+Emergency notification database models (EmergencyNotificationEvent, EmployeeEmergencyResponse, SafetyStatus)

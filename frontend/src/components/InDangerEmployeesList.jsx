@@ -1,0 +1,1 @@
+Admin dashboard component for viewing in-danger employees

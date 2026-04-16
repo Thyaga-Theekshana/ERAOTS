@@ -1,0 +1,1 @@
+API client service for emergency notifications
