@@ -139,7 +139,11 @@ export const emergencyAPI = {
   getHistory: () => api.get('/api/emergency/'),
   trigger: (data) => api.post('/api/emergency/trigger', data),
   resolve: (id) => api.put(`/api/emergency/${id}/resolve`),
-  markAccounted: (headcountId) => api.put(`/api/emergency/headcount/${headcountId}/account`)
+  markAccounted: (headcountId) => api.put(`/api/emergency/headcount/${headcountId}/account`),
+  // Safety Check
+  sendSafetyCheck: (emergencyId, data = {}) => api.post(`/api/emergency/${emergencyId}/safety-check`, data),
+  getSafetyCheck: (emergencyId, statusFilter) => api.get(`/api/emergency/${emergencyId}/safety-check`, { params: { status_filter: statusFilter } }),
+  respondSafetyCheck: (response) => api.put('/api/emergency/safety-check/respond', { response }),
 };
 
 // ==================== HARDWARE SCANNERS (See FR13 later in file) ====================

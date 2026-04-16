@@ -348,6 +348,43 @@ class EmergencyEventResponse(BaseModel):
     notes: Optional[str] = None
     status: str
     headcount_entries: List[EmergencyHeadcountResponse] = []
+    safety_check_sent: bool = False
+
+    class Config:
+        from_attributes = True
+
+# ==================== SAFETY CHECK ====================
+
+class SafetyCheckSendRequest(BaseModel):
+    """Admin triggers 'Are you safe?' to all employees."""
+    message: Optional[str] = "Are you safe? Please respond immediately."
+
+class SafetyCheckRespondRequest(BaseModel):
+    """Employee replies to safety check."""
+    response: str  # "YES" or "NO"
+
+class SafetyCheckEmployeeResponse(BaseModel):
+    """Individual employee's safety check response."""
+    id: UUID
+    employee_id: UUID
+    employee_name: str
+    department_name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    status: str  # PENDING, SAFE, IN_DANGER
+    responded_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+class SafetyCheckOverview(BaseModel):
+    """Overview of all safety check responses for an emergency."""
+    emergency_id: UUID
+    total_employees: int
+    safe_count: int
+    in_danger_count: int
+    pending_count: int
+    responses: List[SafetyCheckEmployeeResponse] = []
 
     class Config:
         from_attributes = True
