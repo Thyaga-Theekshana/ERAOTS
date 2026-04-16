@@ -2,6 +2,8 @@
 ERAOTS — FastAPI Application Entry Point.
 Enterprise Real-Time Attendance & Occupancy Tracking System.
 """
+from sched import scheduler
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
@@ -10,7 +12,7 @@ import logging
 
 from app.core.config import settings as app_settings
 from app.core.database import create_tables
-from app.api import auth, events, employees, attendance, schedules, corrections, notifications, emergency, scanners, settings, reports, calendar, productivity
+from app.api import auth, events, employees, attendance, schedules, corrections, notifications, emergency, scanners, settings, reports, calendar, productivity, hardware
 
 # Configure logging
 logging.basicConfig(
@@ -41,8 +43,23 @@ async def lifespan(app: FastAPI):
         # Seed initial data
         await seed_initial_data()
     except Exception as e:
-        logger.error(f"Database initialization failed: {e}")
-        logger.warning("Server starting without database — some features will be unavailable")
+             # Start background health monitoring scheduler
+    try:
+            from app.core.tasks import start_health_monitoring_scheduler
+            scheduler = await start_health_monitoring_scheduler()
+      # Shutdown
+    # Stop the scheduler if it's running
+    if hasattr(app.state, 'health_scheduler') and app.state.health_scheduler:
+        app.state.health_scheduler.shutdown()
+        logger.info("Health monitoring scheduler stopped")
+    if scheduler:
+                # Store in app state so we can stop it on shutdown
+                app.state.health_scheduler = scheduler
+    except Exception as e:
+    
+    logger.warning(f"Health monitoring scheduler not available: {e}")   
+    logger.error(f"Database initialization failed: {e}")
+    logger.warning("Server starting without database — some features will be unavailable")
     
     # Start background scheduler (FR2.3, FR2.5, FR2.6)
     from app.core.scheduler import run_scheduler
@@ -94,6 +111,7 @@ app.include_router(reports.router)
 app.include_router(calendar.router)
 app.include_router(productivity.router)
 
+app.include_router(hardware.router)
 
 @app.get("/", tags=["Health"])
 async def root():

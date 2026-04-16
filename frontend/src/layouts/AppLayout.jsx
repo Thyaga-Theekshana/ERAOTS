@@ -39,6 +39,10 @@ const allNavItems = [
   { to: '/schedules', label: 'Schedules', icon: 'calendar_month', roles: ['HR_MANAGER', 'SUPER_ADMIN'] },
   { to: '/corrections', label: 'Corrections', icon: 'edit_note', roles: ['HR_MANAGER', 'SUPER_ADMIN'] },
   { to: '/scanners', label: 'Scanners', icon: 'sensors', roles: ['HR_MANAGER', 'SUPER_ADMIN'] },
+
+  // ✅ NEW: Hardware Monitoring
+  { to: '/hardware', label: 'Hardware Health', icon: 'monitor_heart', roles: ['HR_MANAGER', 'SUPER_ADMIN'] },
+
   { to: '/emergency', label: 'Emergency', icon: 'emergency', roles: ['HR_MANAGER', 'SUPER_ADMIN'] },
   { to: '/analytics', label: 'Analytics', icon: 'monitoring', roles: ['HR_MANAGER', 'SUPER_ADMIN'] },
   { to: '/settings', label: 'Settings', icon: 'tune', roles: ['HR_MANAGER', 'SUPER_ADMIN'] },
@@ -56,7 +60,7 @@ const getPageTitle = (pathname, navItems) => {
 };
 
 export default function AppLayout() {
-  const { user, logout, isAdmin, isSuperAdmin, isManager, hasRole } = useAuth();
+  const { user, logout, isAdmin, isSuperAdmin } = useAuth();
   const { toggleTheme, isDark } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
@@ -74,7 +78,6 @@ export default function AppLayout() {
   const [searchLoading, setSearchLoading] = useState(false);
   const searchRef = useRef(null);
 
-  // Close search dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (searchRef.current && !searchRef.current.contains(e.target)) {
@@ -85,7 +88,6 @@ export default function AppLayout() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Debounced search
   useEffect(() => {
     if (!searchQuery.trim()) {
       setSearchResults([]);
@@ -96,7 +98,6 @@ export default function AppLayout() {
     const timer = setTimeout(async () => {
       setSearchLoading(true);
       try {
-        // Only admins can search employees/departments
         const canSearchAll = isAdmin || isSuperAdmin;
         
         const promises = canSearchAll 
@@ -130,7 +131,6 @@ export default function AppLayout() {
               }))
           : [];
         
-        // Add quick navigation results (filtered by role)
         const navMatches = navItems
           .filter(nav => nav.label.toLowerCase().includes(searchQuery.toLowerCase()))
           .slice(0, 3)
@@ -172,17 +172,11 @@ export default function AppLayout() {
     <div className="app-container">
       <div className="app-ambient" aria-hidden="true" />
 
-      {/* Fixed Sidebar */}
+      {/* Sidebar */}
       <aside className="app-sidebar">
-        {/* Brand */}
         <div className="sidebar-brand">
           <div className="sidebar-brand-icon">
-            <span 
-              className="material-symbols-outlined" 
-              style={{ fontSize: '1.5rem', fontVariationSettings: "'FILL' 1" }}
-            >
-              pulse_alert
-            </span>
+            <span className="material-symbols-outlined">pulse_alert</span>
           </div>
           <div className="sidebar-brand-text">
             <span className="sidebar-brand-name">ERAOTS</span>
@@ -190,7 +184,6 @@ export default function AppLayout() {
           </div>
         </div>
 
-        {/* Navigation */}
         <nav className="sidebar-nav">
           {navItems.map((item) => (
             <NavLink
@@ -209,7 +202,6 @@ export default function AppLayout() {
           ))}
         </nav>
 
-        {/* Live Feed Button - Navigate to real-time events section */}
         <div className="sidebar-action">
           <button className="sidebar-action-btn" onClick={() => navigate('/analytics')}>
             <span className="sidebar-action-indicator" />
@@ -217,12 +209,7 @@ export default function AppLayout() {
           </button>
         </div>
 
-        {/* Footer Links */}
         <div className="sidebar-footer">
-          <button className="sidebar-footer-link" onClick={() => window.open('https://github.com/your-org/eraots/wiki', '_blank')}>
-            <span className="material-symbols-outlined">help</span>
-            <span>Help Center</span>
-          </button>
           <button className="sidebar-footer-link" onClick={handleLogout}>
             <span className="material-symbols-outlined">logout</span>
             <span>Logout</span>
@@ -230,118 +217,14 @@ export default function AppLayout() {
         </div>
       </aside>
 
-      {/* Fixed Header */}
+      {/* Header */}
       <header className="app-header">
-        <div className="header-left">
-          <h1 className="header-title">{currentPage}</h1>
-        </div>
-        
-        <div className="header-right">
-          {/* Search */}
-          <div className="header-search" ref={searchRef}>
-            <span className="material-symbols-outlined header-search-icon">search</span>
-            <input 
-              type="text" 
-              className="header-search-input"
-              placeholder="Search employees, departments..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onFocus={() => searchResults.length > 0 && setShowSearchResults(true)}
-            />
-            {searchLoading && <span className="header-search-loading" />}
-            
-            {/* Search Results Dropdown */}
-            {showSearchResults && searchResults.length > 0 && (
-              <div className="header-search-dropdown">
-                {searchResults.map((result) => (
-                  <button
-                    key={`${result.type}-${result.id}`}
-                    className="header-search-result"
-                    onClick={() => handleSearchSelect(result)}
-                  >
-                    <span className="material-symbols-outlined header-search-result-icon">
-                      {result.icon}
-                    </span>
-                    <div className="header-search-result-content">
-                      <span className="header-search-result-name">{result.name}</span>
-                      <span className="header-search-result-subtitle">{result.subtitle}</span>
-                    </div>
-                    <span className="header-search-result-type">{result.type}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-            
-            {showSearchResults && searchResults.length === 0 && searchQuery.trim() && !searchLoading && (
-              <div className="header-search-dropdown">
-                <div className="header-search-empty">
-                  <span className="material-symbols-outlined">search_off</span>
-                  <span>No results found</span>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Theme Toggle */}
-          <div className="header-theme-toggle">
-            <button
-              onClick={() => !isDark && toggleTheme()}
-              className={`header-theme-btn ${!isDark ? 'header-theme-btn--active' : ''}`}
-              title="Light Mode"
-            >
-              <span className="material-symbols-outlined">light_mode</span>
-            </button>
-            <button
-              onClick={() => isDark && toggleTheme()}
-              className={`header-theme-btn ${isDark ? 'header-theme-btn--active' : ''}`}
-              title="Dark Mode"
-            >
-              <span className="material-symbols-outlined">dark_mode</span>
-            </button>
-          </div>
-
-          {/* Notifications */}
-          <button 
-            className="header-icon-btn"
-            onClick={() => navigate('/notifications')}
-            title="Notifications"
-          >
-            <span className="material-symbols-outlined">notifications</span>
-            <span className="header-notification-dot" />
-          </button>
-
-          {/* Settings */}
-          <button 
-            className="header-icon-btn"
-            onClick={() => navigate('/settings')}
-            title="Settings"
-          >
-            <span className="material-symbols-outlined">settings</span>
-          </button>
-
-          {/* Divider */}
-          <div className="header-divider" />
-
-          {/* User Profile */}
-          <div className="header-user">
-            <div className="header-user-info">
-              <span className="header-user-name">{user?.full_name || 'User'}</span>
-              <span className="header-user-role">{user?.role?.replace('_', ' ') || 'Employee'}</span>
-            </div>
-            <div className="header-user-avatar">
-              {user?.full_name?.charAt(0)?.toUpperCase() || 'U'}
-            </div>
-          </div>
-        </div>
+        <h1>{currentPage}</h1>
       </header>
 
-      {/* Main Content Area */}
+      {/* Main */}
       <main className="app-main">
-        <div className="app-content">
-          <div key={location.pathname} className="page-transition-layer">
-            <Outlet />
-          </div>
-        </div>
+        <Outlet />
       </main>
     </div>
   );

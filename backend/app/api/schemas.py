@@ -169,6 +169,56 @@ class ScannerResponse(BaseModel):
     class Config:
         from_attributes = True
 
+# ==================== HARDWARE HEALTH MONITORING ====================
+
+class ScannerHealthLogResponse(BaseModel):
+    """Historical health log entry for a scanner."""
+    log_id: UUID
+    scanner_id: UUID
+    status: str  # ONLINE, OFFLINE, DEGRADED
+    response_time_ms: Optional[int] = None
+    error_message: Optional[str] = None
+    checked_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ScannerHealthResponse(BaseModel):
+    """Current health status of a scanner."""
+    scanner_id: UUID
+    name: str
+    door_name: str
+    status: str  # ONLINE, OFFLINE, DEGRADED
+    last_heartbeat: Optional[datetime] = None
+    heartbeat_interval_sec: int
+    response_time_ms: Optional[int] = None
+    error_count: int = 0
+    
+    class Config:
+        from_attributes = True
+
+
+class ScannerHealthHeartbeatRequest(BaseModel):
+    """Incoming heartbeat from scanner device."""
+    status: str = "ONLINE"  # ONLINE, OFFLINE, DEGRADED
+    response_time_ms: Optional[int] = None
+    error_message: Optional[str] = None
+    battery_level: Optional[int] = None
+
+
+class ScannerHealthStatsResponse(BaseModel):
+    """Summary statistics of all scanners."""
+    total_scanners: int
+    online: int
+    offline: int
+    degraded: int
+    average_response_time_ms: float
+    error_count_today: int
+    uptime_percentage: float
+    
+    class Config:
+        from_attributes = True
 
 # ==================== DASHBOARD ====================
 

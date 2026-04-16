@@ -148,6 +148,14 @@ export const hardwareAPI = {
   register: (data) => api.post('/api/scanners/', data)
 };
 
+// ==================== HARDWARE HEALTH MONITORING ====================
+export const hardwareMonitoringAPI = {
+  getAll: () => api.get('/api/hardware/scanners/health'),
+  getLogs: (scannerId, limit = 100) => api.get(`/api/hardware/scanners/${scannerId}/logs`, { params: { limit } }),
+  getStats: () => api.get('/api/hardware/scanners/stats/summary'),
+};
+
+
 // ==================== SYSTEM SETTINGS ====================
 export const settingsAPI = {
   getPolicies: () => api.get('/api/settings/policies'),
