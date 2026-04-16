@@ -34,6 +34,7 @@ class UserInfo(BaseModel):
     managed_department_name: Optional[str] = None
     phone: Optional[str] = None
     profile_image_url: Optional[str] = None
+    job_title: Optional[str] = None  # Free-text job title (DevOps Engineer, QA Lead, etc.)
     permissions: dict = {}
 
     class Config:
@@ -50,7 +51,8 @@ class EmployeeCreate(BaseModel):
     department_id: Optional[UUID] = None
     fingerprint_id: Optional[str] = None
     hire_date: Optional[date] = None
-    role_name: str = "EMPLOYEE"  # SUPER_ADMIN, HR_MANAGER, EMPLOYEE
+    job_title: Optional[str] = None  # Free-text job role
+    role_name: str = "EMPLOYEE"  # SUPER_ADMIN, HR_MANAGER, MANAGER, EMPLOYEE
     password: str = Field(..., min_length=6)
 
 class EmployeeUpdate(BaseModel):
@@ -59,6 +61,7 @@ class EmployeeUpdate(BaseModel):
     phone: Optional[str] = None
     department_id: Optional[UUID] = None
     fingerprint_id: Optional[str] = None
+    job_title: Optional[str] = None  # Free-text, updateable (promotions)
     status: Optional[str] = None
 
 class EmployeeResponse(BaseModel):
@@ -71,6 +74,7 @@ class EmployeeResponse(BaseModel):
     department_name: Optional[str] = None
     status: str
     hire_date: Optional[date] = None
+    job_title: Optional[str] = None
     current_status: Optional[str] = "OUTSIDE"  # From OccupancyState
     created_at: datetime
 

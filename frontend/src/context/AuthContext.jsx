@@ -9,9 +9,16 @@ const AuthContext = createContext(null);
 // Role hierarchy (higher index = more permissions)
 const ROLE_HIERARCHY = ['EMPLOYEE', 'MANAGER', 'HR_MANAGER', 'SUPER_ADMIN'];
 
+// Roles that have a dual portal (personal + managerial)
+const DUAL_PORTAL_ROLES = ['MANAGER', 'HR_MANAGER'];
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  // 'managerial' | 'personal' — persisted in sessionStorage so page refresh keeps it
+  const [portalMode, setPortalModeState] = useState(() => {
+    return sessionStorage.getItem('eraots_portal_mode') || 'managerial';
+  });
 
   useEffect(() => {
     const token = localStorage.getItem('eraots_token');
@@ -30,17 +37,25 @@ export function AuthProvider({ children }) {
 
   const login = async (email, password) => {
     const res = await authAPI.login(email, password);
-    const { access_token, role, employee_name, user_id } = res.data;
+    const { access_token } = res.data;
     localStorage.setItem('eraots_token', access_token);
     
     // Fetch full user info
     const meRes = await authAPI.getMe();
-    setUser(meRes.data);
-    return meRes.data;
+    const userData = meRes.data;
+    setUser(userData);
+
+    // Default portal mode based on role
+    const defaultMode = DUAL_PORTAL_ROLES.includes(userData.role) ? 'managerial' : 'personal';
+    setPortalModeState(defaultMode);
+    sessionStorage.setItem('eraots_portal_mode', defaultMode);
+    
+    return userData;
   };
 
   const logout = () => {
     localStorage.removeItem('eraots_token');
+    sessionStorage.removeItem('eraots_portal_mode');
     setUser(null);
   };
 
@@ -48,6 +63,16 @@ export function AuthProvider({ children }) {
     const meRes = await authAPI.getMe();
     setUser(meRes.data);
     return meRes.data;
+  };
+
+  const setPortalMode = (mode) => {
+    setPortalModeState(mode);
+    sessionStorage.setItem('eraots_portal_mode', mode);
+  };
+
+  const togglePortalMode = () => {
+    const next = portalMode === 'managerial' ? 'personal' : 'managerial';
+    setPortalMode(next);
   };
 
   // Role helper functions
@@ -67,10 +92,14 @@ export function AuthProvider({ children }) {
       
       // Quick role checks
       isEmployee: role === 'EMPLOYEE',
+      isDeptManager: role === 'MANAGER',
       isManager: role === 'MANAGER' || user?.is_manager,
       isHR: role === 'HR_MANAGER',
       isSuperAdmin: role === 'SUPER_ADMIN',
-      isAdmin: roleIndex >= ROLE_HIERARCHY.indexOf('HR_MANAGER'), // HR or higher
+      isAdmin: roleIndex >= ROLE_HIERARCHY.indexOf('HR_MANAGER'),
+      
+      // Dual portal eligibility
+      hasDualPortal: DUAL_PORTAL_ROLES.includes(role),
       
       // Check specific permission
       hasPermission: (permission) => {
@@ -90,6 +119,9 @@ export function AuthProvider({ children }) {
       logout, 
       loading, 
       refreshUser,
+      portalMode,
+      setPortalMode,
+      togglePortalMode,
       ...roleHelpers 
     }}>
       {children}
@@ -102,3 +134,4 @@ export function useAuth() {
   if (!context) throw new Error('useAuth must be used within AuthProvider');
   return context;
 }
+

@@ -164,7 +164,7 @@ function App() {
                 </RoleRoute>
               } />
               <Route path="settings" element={
-                <RoleRoute allowedRoles={['HR_MANAGER', 'SUPER_ADMIN']}>
+                <RoleRoute allowedRoles={['SUPER_ADMIN', 'HR_MANAGER']}>
                   <SettingsPage />
                 </RoleRoute>
               } />
