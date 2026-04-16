@@ -4,11 +4,13 @@
 import { useState } from 'react';
 import { leaveAPI } from '../services/api';
 
-export default function LeaveRequestModal({ selectedDate, leaveTypes, leaveBalance, onClose, onSubmit }) {
+export default function LeaveRequestModal({ selectedDate, leaveTypes, leaveBalance, holidays = [], existingRequests = [], onClose, onSubmit }) {
   const [formData, setFormData] = useState({
     leave_type_id: leaveTypes[0]?.leave_type_id || '',
     start_date: selectedDate.toISOString().slice(0, 10),
     end_date: selectedDate.toISOString().slice(0, 10),
+    is_half_day: false,
+    half_day_session: 'AM',
     reason: '',
   });
   const [loading, setLoading] = useState(false);
@@ -18,21 +20,53 @@ export default function LeaveRequestModal({ selectedDate, leaveTypes, leaveBalan
   const selectedType = leaveTypes.find(t => t.leave_type_id === formData.leave_type_id);
   const balanceInfo = leaveBalance.find(b => b.leave_type_id === formData.leave_type_id);
 
+  const holidaySet = new Set((holidays || []).map((h) => h.holiday_date));
+
+  const isWeekend = (dateObj) => dateObj.getDay() === 0 || dateObj.getDay() === 6;
+
   const calculateDays = () => {
-    const start = new Date(formData.start_date);
-    const end = new Date(formData.end_date);
-    return Math.max(0, (end - start) / (1000 * 60 * 60 * 24) + 1);
+    const start = new Date(`${formData.start_date}T00:00:00`);
+    const end = new Date(`${formData.end_date}T00:00:00`);
+    if (start > end) return 0;
+    let days = 0;
+    const cursor = new Date(start);
+    while (cursor <= end) {
+      const key = cursor.toISOString().slice(0, 10);
+      if (!isWeekend(cursor) && !holidaySet.has(key)) {
+        days += 1;
+      }
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    if (formData.is_half_day) {
+      return days > 0 ? 0.5 : 0;
+    }
+    return days;
+  };
+
+  const hasConflict = () => {
+    const newStart = formData.start_date;
+    const newEnd = formData.end_date;
+    return existingRequests.some((req) => (
+      ['PENDING', 'APPROVED'].includes(req.status) &&
+      req.start_date <= newEnd &&
+      req.end_date >= newStart
+    ));
   };
 
   const days = calculateDays();
+  const conflictExists = hasConflict();
+  const projectedRemaining = balanceInfo && balanceInfo.remaining_days !== null
+    ? Number(balanceInfo.remaining_days) - Number(days)
+    : null;
   const canSubmit = days > 0 && formData.leave_type_id && 
-                    (!balanceInfo || balanceInfo.remaining_days === null || balanceInfo.remaining_days >= days);
+                    !conflictExists &&
+                    (!balanceInfo || balanceInfo.remaining_days === null || Number(balanceInfo.remaining_days) >= Number(days));
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
-      [name]: value
+      [name]: name === 'is_half_day' ? value === 'true' : value
     }));
     setError('');
   };
@@ -42,6 +76,21 @@ export default function LeaveRequestModal({ selectedDate, leaveTypes, leaveBalan
     
     if (new Date(formData.start_date) > new Date(formData.end_date)) {
       setError('Start date must be before or equal to end date');
+      return;
+    }
+
+    if (formData.is_half_day && formData.start_date !== formData.end_date) {
+      setError('Half-day leave requires same start and end date.');
+      return;
+    }
+
+    if (conflictExists) {
+      setError('You already have a pending or approved leave request in this date range.');
+      return;
+    }
+
+    if (days <= 0) {
+      setError('Selected date range contains only weekends or holidays.');
       return;
     }
 
@@ -56,6 +105,8 @@ export default function LeaveRequestModal({ selectedDate, leaveTypes, leaveBalan
         leave_type_id: formData.leave_type_id,
         start_date: formData.start_date,
         end_date: formData.end_date,
+        is_half_day: formData.is_half_day,
+        half_day_session: formData.is_half_day ? formData.half_day_session : null,
         reason: formData.reason || null,
       });
       setSuccess(true);
@@ -82,7 +133,7 @@ export default function LeaveRequestModal({ selectedDate, leaveTypes, leaveBalan
             <strong>{selectedType?.name}</strong><br />
             {new Date(formData.start_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })} - {new Date(formData.end_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
             <br />
-            <span className="days-count">({days} day{days !== 1 ? 's' : ''})</span>
+            <span className="days-count">({days} effective day{days !== 1 ? 's' : ''})</span>
           </p>
         </div>
       </div>
@@ -172,13 +223,62 @@ export default function LeaveRequestModal({ selectedDate, leaveTypes, leaveBalan
             </div>
           </div>
 
+          {/* Half Day Option */}
+          <div className="form-group">
+            <label htmlFor="is_half_day">
+              <span className="material-symbols-outlined">timelapse</span>
+              Duration Type
+            </label>
+            <select
+              id="is_half_day"
+              name="is_half_day"
+              value={String(formData.is_half_day)}
+              onChange={handleChange}
+            >
+              <option value="false">Full Day</option>
+              <option value="true">Half Day</option>
+            </select>
+          </div>
+
+          {formData.is_half_day && (
+            <div className="form-group">
+              <label htmlFor="half_day_session">
+                <span className="material-symbols-outlined">schedule</span>
+                Half Day Session
+              </label>
+              <select
+                id="half_day_session"
+                name="half_day_session"
+                value={formData.half_day_session}
+                onChange={handleChange}
+              >
+                <option value="AM">Morning (AM)</option>
+                <option value="PM">Afternoon (PM)</option>
+              </select>
+            </div>
+          )}
+
           {/* Days Summary */}
           <div className="days-summary">
             <span className="material-symbols-outlined">schedule</span>
             <span>
-              <strong>{days}</strong> day{days !== 1 ? 's' : ''} requested
+              <strong>{days}</strong> effective day{days !== 1 ? 's' : ''} requested
             </span>
           </div>
+
+          {projectedRemaining !== null && (
+            <div className={`days-summary ${projectedRemaining < 0 ? 'balance-info--zero' : ''}`}>
+              <span className="material-symbols-outlined">monitoring</span>
+              <span>Projected remaining balance: <strong>{Math.max(0, projectedRemaining)}</strong> days</span>
+            </div>
+          )}
+
+          {conflictExists && (
+            <div className="alert alert-error">
+              <span className="material-symbols-outlined">warning</span>
+              <span>Date conflict: existing pending/approved leave overlaps this request.</span>
+            </div>
+          )}
 
           {/* Reason */}
           <div className="form-group">

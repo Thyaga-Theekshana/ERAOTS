@@ -2,7 +2,7 @@
  * LeaveCalendarView — Month-based calendar for managing leave requests.
  */
 import { useState, useEffect } from 'react';
-import { leaveAPI } from '../services/api';
+import { leaveAPI, downloadBlob } from '../services/api';
 import LeaveRequestModal from './LeaveRequestModal';
 
 export default function LeaveCalendarView({ leaveBalance, onLeaveRequestSubmitted }) {
@@ -107,6 +107,40 @@ export default function LeaveCalendarView({ leaveBalance, onLeaveRequestSubmitte
     }
   };
 
+  const buildDayTooltip = (holiday, leaves) => {
+    const parts = [];
+    if (holiday) parts.push(`Holiday: ${holiday.name}`);
+    if (leaves.length > 0) {
+      leaves.forEach((leave) => {
+        const halfDayNote = leave.is_half_day ? ` (${leave.half_day_session || 'Half Day'})` : '';
+        parts.push(`${leave.leave_type_name}: ${leave.status}${halfDayNote}`);
+      });
+    }
+    return parts.join('\n');
+  };
+
+  const exportHistoryCsv = () => {
+    if (requestHistory.length === 0) return;
+    const monthParam = currentMonth.toISOString().slice(0, 7);
+    leaveAPI.exportMyRequests('csv', monthParam)
+      .then((res) => downloadBlob(res.data, `leave-history-${monthParam}.csv`))
+      .catch((err) => {
+        console.error('CSV export failed:', err);
+        alert(err.response?.data?.detail || 'CSV export failed');
+      });
+  };
+
+  const exportHistoryPdf = () => {
+    if (requestHistory.length === 0) return;
+    const monthParam = currentMonth.toISOString().slice(0, 7);
+    leaveAPI.exportMyRequests('pdf', monthParam)
+      .then((res) => downloadBlob(res.data, `leave-history-${monthParam}.pdf`))
+      .catch((err) => {
+        console.error('PDF export failed:', err);
+        alert(err.response?.data?.detail || 'PDF export failed');
+      });
+  };
+
   const monthName = currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
   const daysInMonth = getDaysInMonth(currentMonth);
   const firstDay = getFirstDayOfMonth(currentMonth);
@@ -136,6 +170,14 @@ export default function LeaveCalendarView({ leaveBalance, onLeaveRequestSubmitte
         </button>
         <button className="btn-secondary" style={{ marginLeft: 'auto' }} onClick={handleToday}>
           Today
+        </button>
+        <button className="btn-secondary" onClick={exportHistoryCsv} disabled={requestHistory.length === 0}>
+          <span className="material-symbols-outlined">download</span>
+          Export CSV
+        </button>
+        <button className="btn-secondary" onClick={exportHistoryPdf} disabled={requestHistory.length === 0}>
+          <span className="material-symbols-outlined">picture_as_pdf</span>
+          Export PDF
         </button>
       </div>
 
@@ -193,6 +235,7 @@ export default function LeaveCalendarView({ leaveBalance, onLeaveRequestSubmitte
                   key={day}
                   className={`calendar-day ${isToday ? 'calendar-day--today' : ''} ${isPastDate ? 'calendar-day--past' : ''} ${isHoliday ? 'calendar-day--holiday' : ''}`}
                   onClick={() => !isPastDate && !isHoliday && handleDateClick(day)}
+                  title={buildDayTooltip(holiday, leaves)}
                 >
                   <div className="calendar-day-number">{day}</div>
                   {holiday && (
@@ -224,6 +267,8 @@ export default function LeaveCalendarView({ leaveBalance, onLeaveRequestSubmitte
           selectedDate={selectedDate}
           leaveTypes={leaveTypes}
           leaveBalance={leaveBalance}
+          holidays={holidays}
+          existingRequests={requestHistory}
           onClose={() => setShowModal(false)}
           onSubmit={handleLeaveSubmitted}
         />
@@ -251,6 +296,7 @@ export default function LeaveCalendarView({ leaveBalance, onLeaveRequestSubmitte
                     {new Date(req.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - {new Date(req.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                   </span>
                 </div>
+                <p className="request-comment">Effective days: {req.effective_days ?? '-'}</p>
                 {req.reason && <p className="request-reason">Reason: {req.reason}</p>}
                 {req.review_comment && <p className="request-comment">Manager comment: {req.review_comment}</p>}
                 {req.status === 'PENDING' && (

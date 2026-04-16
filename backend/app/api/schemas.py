@@ -246,6 +246,8 @@ class LeaveRequestCreate(BaseModel):
     start_date: date
     end_date: date
     reason: Optional[str] = None
+    is_half_day: bool = False
+    half_day_session: Optional[str] = None  # AM or PM when is_half_day=true
 
 class LeaveRequestResponse(BaseModel):
     request_id: UUID
@@ -257,6 +259,9 @@ class LeaveRequestResponse(BaseModel):
     end_date: date
     status: str
     reason: Optional[str] = None
+    is_half_day: bool = False
+    half_day_session: Optional[str] = None
+    effective_days: float = 0.0
     review_comment: Optional[str] = None
     reviewed_at: Optional[datetime] = None
     created_at: datetime
@@ -268,9 +273,9 @@ class LeaveRequestResponse(BaseModel):
 class LeaveUsageSummary(BaseModel):
     leave_type_id: UUID
     leave_type_name: str
-    used_days: int
-    remaining_days: Optional[int] = None
-    max_days_per_year: Optional[int] = None
+    used_days: float
+    remaining_days: Optional[float] = None
+    max_days_per_year: Optional[float] = None
     warning_level: str = "NONE"  # NONE, NEAR_LIMIT, EXCEEDED
 
 
@@ -282,6 +287,8 @@ class LeaveCalendarEntry(BaseModel):
     start_date: date
     end_date: date
     status: str
+    is_half_day: bool = False
+    half_day_session: Optional[str] = None
 
 class LeaveHolidayEntry(BaseModel):
     holiday_id: UUID
