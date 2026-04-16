@@ -1,0 +1,1 @@
+React component for employee notification modal with Yes/No buttons

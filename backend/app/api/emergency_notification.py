@@ -1,0 +1,1 @@
+REST API endpoints for emergency notifications with full CRUD operations
