@@ -11,6 +11,12 @@ import { employeeAPI, departmentAPI } from '../services/api';
 
 // Navigation items with role requirements
 const allNavItems = [
+  {
+  label: 'Hardware',
+  icon: 'devices',
+  path: '/hardware',
+  requiredRoles: ['SUPER_ADMIN', 'HR_MANAGER', 'MANAGER'],
+}
   // Everyone can see dashboard
   { to: '/', label: 'Dashboard', icon: 'grid_view', roles: ['EMPLOYEE', 'MANAGER', 'HR_MANAGER', 'SUPER_ADMIN'] },
   

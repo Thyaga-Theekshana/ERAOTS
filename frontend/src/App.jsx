@@ -26,6 +26,7 @@ import TeamPage from './pages/TeamPage';
 import DevToolsPage from './pages/DevToolsPage';
 import PlaceholderPage from './pages/PlaceholderPage';
 import './styles/index.css';
+import HardwarePage from './pages/HardwarePage';
 
 /**
  * Protected route wrapper — redirects to login if not authenticated.
@@ -75,7 +76,14 @@ function RoleRoute({ children, allowedRoles }) {
   
   return children;
 }
-
+{
+  path: '/hardware',
+  element: (
+    <RoleRoute allowedRoles={['SUPER_ADMIN', 'HR_MANAGER', 'MANAGER']}>
+      <HardwarePage />
+    </RoleRoute>
+  ),
+}
 function App() {
   return (
     <ThemeProvider>
