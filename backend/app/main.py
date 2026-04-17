@@ -28,52 +28,56 @@ async def lifespan(app: FastAPI):
     """Application startup and shutdown events."""
     # Startup
     logger.info("=" * 60)
-    logger.info(f"  ERAOTS v{app_settings.APP_VERSION} starting...")
-    logger.info(f"  Debug mode: {app_settings.DEBUG}")
-    logger.info(f"  Database: {app_settings.DATABASE_URL.split('@')[-1] if '@' in app_settings.DATABASE_URL else 'configured'}")
+    logger.info(f"   ERAOTS v{app_settings.APP_VERSION} starting...")
+    logger.info(f"   Debug mode: {app_settings.DEBUG}")
+    logger.info(
+        f"   Database: {app_settings.DATABASE_URL.split('@')[-1] if '@' in app_settings.DATABASE_URL else 'configured'}")
     logger.info("=" * 60)
-    
+
     # Create database tables
     try:
         # Import all models so SQLAlchemy knows about them
         import app.models  # noqa: F401
         await create_tables()
         logger.info("Database tables created/verified")
-        
+
         # Seed initial data
         await seed_initial_data()
-    except Exception as e:
-             # Start background health monitoring scheduler
-    try:
+        
+        # Start background health monitoring scheduler
+        try:
             from app.core.tasks import start_health_monitoring_scheduler
             scheduler = await start_health_monitoring_scheduler()
-      # Shutdown
-    # Stop the scheduler if it's running
-    if hasattr(app.state, 'health_scheduler') and app.state.health_scheduler:
-        app.state.health_scheduler.shutdown()
-        logger.info("Health monitoring scheduler stopped")
-    if scheduler:
+            if scheduler:
                 # Store in app state so we can stop it on shutdown
                 app.state.health_scheduler = scheduler
+        except Exception as e:
+            logger.warning(f"Health monitoring scheduler not available: {e}")
+
     except Exception as e:
-    
-    logger.warning(f"Health monitoring scheduler not available: {e}")   
-    logger.error(f"Database initialization failed: {e}")
-    logger.warning("Server starting without database — some features will be unavailable")
-    
+        logger.error(f"Database initialization failed: {e}")
+        logger.warning(
+            "Server starting without database — some features will be unavailable")
+
     # Start background scheduler (FR2.3, FR2.5, FR2.6)
     from app.core.scheduler import run_scheduler
     scheduler_task = asyncio.create_task(run_scheduler())
     logger.info("Background scheduler started")
-    
+
     yield
-    
+
     # Shutdown — cancel scheduler
     scheduler_task.cancel()
     try:
         await scheduler_task
     except asyncio.CancelledError:
         pass
+        
+    # Stop the scheduler if it's running
+    if hasattr(app.state, 'health_scheduler') and app.state.health_scheduler:
+        app.state.health_scheduler.shutdown()
+        logger.info("Health monitoring scheduler stopped")
+        
     logger.info("ERAOTS shutting down...")
 
 
@@ -113,6 +117,7 @@ app.include_router(productivity.router)
 
 app.include_router(hardware.router)
 
+
 @app.get("/", tags=["Health"])
 async def root():
     """Health check endpoint."""
@@ -143,22 +148,23 @@ async def seed_initial_data():
     from app.models.hardware import Scanner
     from app.core.security import hash_password, hash_fingerprint, generate_api_key, hash_api_key
     from sqlalchemy import select
-    
+
     async with AsyncSessionLocal() as db:
         # Check if roles exist
         result = await db.execute(select(Role))
         if result.first():
             logger.info("Database already seeded, skipping")
             return
-        
+
         logger.info("Seeding initial data...")
-        
+
         # Create roles
         roles = {
             "SUPER_ADMIN": Role(
                 name="SUPER_ADMIN",
                 description="Full system access - configuration, hardware, policies, dev tools",
-                permissions={"all": True, "dev_tools": True, "system_logs": True},
+                permissions={"all": True,
+                             "dev_tools": True, "system_logs": True},
             ),
             "HR_MANAGER": Role(
                 name="HR_MANAGER",
@@ -204,7 +210,7 @@ async def seed_initial_data():
         for role in roles.values():
             db.add(role)
         await db.flush()
-        
+
         # Create default admin employee
         admin = Employee(
             first_name="System",
@@ -216,7 +222,7 @@ async def seed_initial_data():
         )
         db.add(admin)
         await db.flush()
-        
+
         # Create admin user account
         admin_account = UserAccount(
             employee_id=admin.employee_id,
@@ -225,7 +231,7 @@ async def seed_initial_data():
             role_id=roles["SUPER_ADMIN"].role_id,
         )
         db.add(admin_account)
-        
+
         # Create 2 door scanners
         for i, (name, door) in enumerate([
             ("Scanner Alpha", "Main Entrance"),
@@ -241,7 +247,7 @@ async def seed_initial_data():
             )
             db.add(scanner)
             logger.info(f"  Scanner '{name}' created — API Key: {api_key}")
-        
+
         await db.commit()
         logger.info("Initial data seeded successfully!")
         logger.info("  Default admin: admin@eraots.com / admin123")
