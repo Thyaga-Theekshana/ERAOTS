@@ -11,6 +11,7 @@ import WeekScheduleView from '../components/WeekScheduleView';
 export default function MySchedulePage() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('week');
+  const [openLeaveRequestNonce, setOpenLeaveRequestNonce] = useState(0);
   const [schedules, setSchedules] = useState([]);
   const [leaveBalance, setLeaveBalance] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -55,6 +56,11 @@ export default function MySchedulePage() {
     fetchData();
   };
 
+  const handleOpenLeaveRequest = () => {
+    setActiveTab('calendar');
+    setOpenLeaveRequestNonce((prev) => prev + 1);
+  };
+
   return (
     <div className="page-container">
       {/* Page Header */}
@@ -66,7 +72,7 @@ export default function MySchedulePage() {
         </div>
         <button
           className="btn btn-primary"
-          onClick={() => setActiveTab('calendar')}
+          onClick={handleOpenLeaveRequest}
         >
           <span className="material-symbols-outlined">calendar_month</span>
           Leave Request
@@ -144,6 +150,7 @@ export default function MySchedulePage() {
             <LeaveCalendarView 
               leaveBalance={leaveBalance}
               onLeaveRequestSubmitted={handleLeaveRequestSubmitted}
+              openRequestTrigger={openLeaveRequestNonce}
             />
           )}
         </>
