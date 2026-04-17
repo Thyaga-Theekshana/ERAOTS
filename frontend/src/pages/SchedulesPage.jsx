@@ -88,8 +88,13 @@ export default function SchedulesPage({ departmentScoped = false }) {
   };
 
   const handleStatusUpdate = async (id, status) => {
+    const comment = window.prompt(`Enter ${status.toLowerCase()} comment (required):`);
+    if (!comment || !comment.trim()) {
+      alert('Comment is required.');
+      return;
+    }
     try {
-      await leaveAPI.updateStatus(id, status, `HR marked as ${status}`);
+      await leaveAPI.updateStatus(id, status, comment.trim());
       fetchData();
     } catch (err) {
       alert(err.response?.data?.detail || 'Failed to update request');
@@ -130,6 +135,8 @@ export default function SchedulesPage({ departmentScoped = false }) {
 
   const statusClassForLeave = (status) => {
     if (status === 'APPROVED') return 'status-chip--active';
+    if (status === 'REJECTED') return 'status-chip--danger';
+    if (status === 'CANCELLED') return 'status-chip--inactive';
     if (status === 'PENDING') return 'status-chip--danger';
     return 'status-chip--warning';
   };
@@ -138,6 +145,7 @@ export default function SchedulesPage({ departmentScoped = false }) {
   const pendingCount = requests.filter((r) => r.status === 'PENDING').length;
   const approvedCount = requests.filter((r) => r.status === 'APPROVED').length;
   const rejectedCount = requests.filter((r) => r.status === 'REJECTED').length;
+  const cancelledCount = requests.filter((r) => r.status === 'CANCELLED').length;
   const warningItems = usageSummary.filter((item) => item.warning_level === 'NEAR_LIMIT' || item.warning_level === 'EXCEEDED');
   const calendarDays = getCalendarDays();
 
@@ -210,6 +218,10 @@ export default function SchedulesPage({ departmentScoped = false }) {
           <span className="stat-card-mini-label">Rejected</span>
           <span className="stat-card-mini-value">{rejectedCount}</span>
         </div>
+        <div className="stat-card-mini">
+          <span className="stat-card-mini-label">Cancelled</span>
+          <span className="stat-card-mini-value">{cancelledCount}</span>
+        </div>
       </div>
 
       {activeView === 'table' && (
@@ -238,6 +250,7 @@ export default function SchedulesPage({ departmentScoped = false }) {
                     <th>Leave Type</th>
                     <th>Duration</th>
                     <th>Reason</th>
+                    <th>Review Comment</th>
                     <th>Status</th>
                     {isHR && <th>Actions</th>}
                   </tr>
@@ -245,7 +258,7 @@ export default function SchedulesPage({ departmentScoped = false }) {
                 <tbody>
                   {requests.length === 0 ? (
                     <tr>
-                      <td colSpan={isHR ? 6 : 4} className="table-empty">
+                      <td colSpan={isHR ? 7 : 5} className="table-empty">
                         <span className="material-symbols-outlined">event_busy</span>
                         <p>No leave requests found</p>
                       </td>
@@ -272,9 +285,13 @@ export default function SchedulesPage({ departmentScoped = false }) {
                           <span className="table-cell-secondary">{req.reason || '—'}</span>
                         </td>
                         <td>
+                          <span className="table-cell-secondary">{req.review_comment || '—'}</span>
+                        </td>
+                        <td>
                           <span className={`status-chip ${
                             req.status === 'APPROVED' ? 'status-chip--active' :
                             req.status === 'REJECTED' ? 'status-chip--danger' :
+                            req.status === 'CANCELLED' ? 'status-chip--inactive' :
                             'status-chip--warning'
                           }`}>
                             {req.status}
@@ -334,7 +351,7 @@ export default function SchedulesPage({ departmentScoped = false }) {
                   <div className="leave-calendar-events">
                     {entries.map((entry) => (
                       <span key={`${entry.request_id}-${entry.status}`} className={`status-chip ${statusClassForLeave(entry.status)}`}>
-                        {entry.status === 'APPROVED' ? 'Approved' : 'Pending'} {isHR ? `• ${entry.employee_name}` : ''}
+                        {entry.status === 'APPROVED' ? 'Approved' : entry.status === 'REJECTED' ? 'Rejected' : entry.status === 'CANCELLED' ? 'Cancelled' : 'Pending'} {isHR ? `• ${entry.employee_name}` : ''}
                       </span>
                     ))}
                   </div>
