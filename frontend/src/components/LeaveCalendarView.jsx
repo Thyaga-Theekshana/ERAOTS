@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react';
 import { leaveAPI, downloadBlob } from '../services/api';
 import LeaveRequestModal from './LeaveRequestModal';
 
-export default function LeaveCalendarView({ leaveBalance, onLeaveRequestSubmitted }) {
+export default function LeaveCalendarView({ leaveBalance, onLeaveRequestSubmitted, openRequestTrigger = 0 }) {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [leaveRequests, setLeaveRequests] = useState([]);
   const [requestHistory, setRequestHistory] = useState([]);
@@ -19,6 +19,13 @@ export default function LeaveCalendarView({ leaveBalance, onLeaveRequestSubmitte
   useEffect(() => {
     fetchData();
   }, [currentMonth]);
+
+  useEffect(() => {
+    if (!openRequestTrigger) return;
+    const today = new Date();
+    setSelectedDate(today);
+    setShowModal(true);
+  }, [openRequestTrigger]);
 
   const fetchData = async () => {
     setLoading(true);
