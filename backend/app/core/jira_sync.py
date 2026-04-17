@@ -88,7 +88,7 @@ async def sync_all_jira_productivity(db: AsyncSession) -> int:
             select(AttendanceRecord).where(
                 and_(
                     AttendanceRecord.employee_id == emp.employee_id,
-                    AttendanceRecord.date == today_str
+                    AttendanceRecord.attendance_date == now.date()
                 )
             )
         )

@@ -6,16 +6,16 @@ import { useNavigate } from 'react-router-dom';
 export default function MeetingAlerts() {
   const { isSuperAdmin, isAdmin } = useAuth();
   const navigate = useNavigate();
-  
+
   const [loading, setLoading] = useState(true);
   const [meetings, setMeetings] = useState([]);
-  
+
   const [showModal, setShowModal] = useState(false);
   const [formData, setFormData] = useState({
     title: '', description: '', scheduled_at: '',
     reminder_minutes: [], target_type: 'ALL', target_ids: []
   });
-  
+
   const [departments, setDepartments] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [submitting, setSubmitting] = useState(false);
@@ -55,8 +55,8 @@ export default function MeetingAlerts() {
 
   const handleReminderToggle = (min) => {
     setFormData(p => {
-      const arr = p.reminder_minutes.includes(min) 
-        ? p.reminder_minutes.filter(m => m !== min) 
+      const arr = p.reminder_minutes.includes(min)
+        ? p.reminder_minutes.filter(m => m !== min)
         : [...p.reminder_minutes, min];
       return { ...p, reminder_minutes: arr };
     });
@@ -141,8 +141,8 @@ export default function MeetingAlerts() {
                   <td style={{ padding: '16px', color: 'var(--text-secondary)' }}>
                     {m.reminder_minutes.map(rem => (
                       rem === 1440 ? '1d, ' :
-                      rem === 60 ? '1h, ' :
-                      `${rem}m, `
+                        rem === 60 ? '1h, ' :
+                          `${rem}m, `
                     ))}
                   </td>
                   <td style={{ padding: '16px' }}>{getStatus(m)}</td>
@@ -160,33 +160,33 @@ export default function MeetingAlerts() {
 
       {/* Modal Overlay */}
       {showModal && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-          <div className="glass-card" style={{ width: '500px', maxHeight: '90vh', overflowY: 'auto', padding: '24px' }}>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', zIndex: 1000, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+          <div className="glass-card" style={{ width: '500px', maxHeight: '90vh', overflowY: 'auto', padding: '24px', background: 'rgba(20, 25, 35, 0.98)', boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
               <h3>Create Meeting Alert</h3>
               <button className="btn-icon" onClick={() => setShowModal(false)}><span className="material-symbols-outlined">close</span></button>
             </div>
-            
+
             <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <label>
                 Title *
-                <input type="text" className="form-input" style={{ width: '100%', marginTop: '8px' }} required value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
+                <input type="text" className="form-input" style={{ width: '100%', marginTop: '8px' }} required value={formData.title} onChange={e => setFormData({ ...formData, title: e.target.value })} />
               </label>
 
               <label>
                 Description
-                <textarea className="form-input" style={{ width: '100%', marginTop: '8px', height: '80px', resize: 'vertical' }} value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
+                <textarea className="form-input" style={{ width: '100%', marginTop: '8px', height: '80px', resize: 'vertical' }} value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} />
               </label>
 
               <label>
                 Date & Time *
-                <input type="datetime-local" className="form-input" style={{ width: '100%', marginTop: '8px' }} required value={formData.scheduled_at} onChange={e => setFormData({...formData, scheduled_at: e.target.value})} />
+                <input type="datetime-local" className="form-input" style={{ width: '100%', marginTop: '8px' }} required value={formData.scheduled_at} onChange={e => setFormData({ ...formData, scheduled_at: e.target.value })} />
               </label>
 
               <div>
                 <strong>Reminder Times</strong>
                 <div style={{ display: 'flex', gap: '16px', marginTop: '8px', flexWrap: 'wrap' }}>
-                  {[ {l: '10 mins before', v: 10}, {l: '30 mins before', v: 30}, {l: '1 hour before', v: 60}, {l: '1 day before', v: 1440} ].map(r => (
+                  {[{ l: '10 mins before', v: 10 }, { l: '30 mins before', v: 30 }, { l: '1 hour before', v: 60 }, { l: '1 day before', v: 1440 }].map(r => (
                     <label key={r.v} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                       <input type="checkbox" checked={formData.reminder_minutes.includes(r.v)} onChange={() => handleReminderToggle(r.v)} />
                       {r.l}
@@ -200,7 +200,7 @@ export default function MeetingAlerts() {
                 <div style={{ display: 'flex', gap: '16px', marginTop: '8px' }}>
                   {['ALL', 'DEPARTMENT', 'SELECTED'].map(t => (
                     <label key={t} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <input type="radio" name="audience" checked={formData.target_type === t} onChange={() => setFormData({...formData, target_type: t, target_ids: []})} />
+                      <input type="radio" name="audience" checked={formData.target_type === t} onChange={() => setFormData({ ...formData, target_type: t, target_ids: [] })} />
                       {t === 'ALL' ? 'All Employees' : t === 'DEPARTMENT' ? 'By Department' : 'Select People'}
                     </label>
                   ))}
@@ -212,10 +212,10 @@ export default function MeetingAlerts() {
                   {departments.map(d => (
                     <label key={d.department_id} style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
                       <input type="checkbox" checked={formData.target_ids.includes(d.department_id)} onChange={(e) => {
-                        const newIds = e.target.checked 
-                          ? [...formData.target_ids, d.department_id] 
+                        const newIds = e.target.checked
+                          ? [...formData.target_ids, d.department_id]
                           : formData.target_ids.filter(id => id !== d.department_id);
-                        setFormData({...formData, target_ids: newIds});
+                        setFormData({ ...formData, target_ids: newIds });
                       }} />
                       {d.name}
                     </label>
@@ -228,10 +228,10 @@ export default function MeetingAlerts() {
                   {employees.map(e => (
                     <label key={e.employee_id} style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
                       <input type="checkbox" checked={formData.target_ids.includes(e.employee_id)} onChange={(ev) => {
-                        const newIds = ev.target.checked 
-                          ? [...formData.target_ids, e.employee_id] 
+                        const newIds = ev.target.checked
+                          ? [...formData.target_ids, e.employee_id]
                           : formData.target_ids.filter(id => id !== e.employee_id);
-                        setFormData({...formData, target_ids: newIds});
+                        setFormData({ ...formData, target_ids: newIds });
                       }} />
                       {e.first_name} {e.last_name} <span style={{ color: 'var(--text-muted)' }}>({e.department_name})</span>
                     </label>
