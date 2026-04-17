@@ -124,7 +124,11 @@ export const leaveAPI = {
 export const correctionsAPI = {
   submit: (data) => api.post('/api/corrections/', data),
   list: (status) => api.get('/api/corrections/', { params: { status } }),
-  updateStatus: (id, status_val, comment) => api.put(`/api/corrections/${id}/status`, null, { params: { status: status_val, comment } })
+  myCorrections: (status) => api.get('/api/corrections/my', { params: { status } }),
+  managerApprove: (id, comment) => api.put(`/api/corrections/${id}/manager-approve`, null, { params: { comment } }),
+  managerReject: (id, comment) => api.put(`/api/corrections/${id}/manager-reject`, null, { params: { comment } }),
+  hrApprove: (id, comment) => api.put(`/api/corrections/${id}/hr-approve`, null, { params: { comment } }),
+  hrReject: (id, comment) => api.put(`/api/corrections/${id}/hr-reject`, null, { params: { comment } })
 };
 
 // ==================== NOTIFICATIONS ====================

@@ -34,6 +34,7 @@ from app.models.events import ScanEvent, OccupancyState, StatusLog, OCCUPANCY_ST
 from app.models.hardware import Scanner
 from app.models.attendance import AttendanceRecord
 from app.models.schedule import Schedule, EmployeeSchedule, LeaveType, LeaveRequest
+from app.models.corrections import CorrectionRequest
 
 
 class TestEmployeeModel:
@@ -709,6 +710,53 @@ class TestSafetyCheckResponseModel:
                 status=status
             )
             assert scr.status == status
+
+class TestCorrectionRequestModel:
+    """
+    Test suite for CorrectionRequest model.
+    """
+
+    @pytest.mark.unit
+    def test_correction_request_instantiation(self):
+        """CorrectionRequest should instantiate with required fields."""
+        emp_id = uuid4()
+        req = CorrectionRequest(
+            employee_id=emp_id,
+            correction_date=date.today(),
+            correction_type="MISSED_SCAN",
+            proposed_time=datetime.now(timezone.utc),
+            reason="Forgot to scan"
+        )
+        assert req.employee_id == emp_id
+        assert req.correction_type == "MISSED_SCAN"
+
+    @pytest.mark.unit
+    def test_correction_request_manager_hr_fields(self):
+        """CorrectionRequest should support manager and hr specific fields."""
+        emp_id = uuid4()
+        mgr_id = uuid4()
+        hr_id = uuid4()
+        now = datetime.now(timezone.utc)
+        
+        req = CorrectionRequest(
+            employee_id=emp_id,
+            correction_date=date.today(),
+            correction_type="MISSED_SCAN",
+            proposed_time=now,
+            reason="I forgot",
+            status="MANAGER_APPROVED",
+            manager_id=mgr_id,
+            manager_comment="Approved",
+            manager_reviewed_at=now,
+            hr_id=hr_id,
+            hr_comment="Final review",
+            hr_reviewed_at=now
+        )
+        
+        assert req.status == "MANAGER_APPROVED"
+        assert req.manager_id == mgr_id
+        assert req.hr_id == hr_id
+        assert req.manager_comment == "Approved"
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

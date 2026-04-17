@@ -22,16 +22,20 @@ class CorrectionRequest(Base):
     correction_type = Column(String(20), nullable=False)  # MISSED_SCAN, WRONG_SCAN, OTHER
     proposed_time = Column(DateTime(timezone=True), nullable=False)
     reason = Column(Text, nullable=False)
-    status = Column(String(20), nullable=False, default="PENDING")  # PENDING, APPROVED, REJECTED
-    reviewed_by = Column(GUID(), ForeignKey("employees.employee_id"), nullable=True)
-    review_comment = Column(Text, nullable=True)
-    reviewed_at = Column(DateTime(timezone=True), nullable=True)
+    status = Column(String(20), nullable=False, default="PENDING")  # PENDING, MANAGER_APPROVED, HR_APPROVED, COMPLETED, REJECTED
+    manager_id = Column(GUID(), ForeignKey("employees.employee_id"), nullable=True)
+    manager_comment = Column(Text, nullable=True)
+    manager_reviewed_at = Column(DateTime(timezone=True), nullable=True)
+    hr_id = Column(GUID(), ForeignKey("employees.employee_id"), nullable=True)
+    hr_comment = Column(Text, nullable=True)
+    hr_reviewed_at = Column(DateTime(timezone=True), nullable=True)
     created_event_id = Column(GUID(), ForeignKey("scan_events.event_id"), nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationships
     employee = relationship("Employee", back_populates="correction_requests", foreign_keys=[employee_id])
-    reviewer = relationship("Employee", foreign_keys=[reviewed_by])
+    manager = relationship("Employee", foreign_keys=[manager_id])
+    hr_admin = relationship("Employee", foreign_keys=[hr_id])
     original_event = relationship("ScanEvent", foreign_keys=[original_event_id])
     created_event = relationship("ScanEvent", foreign_keys=[created_event_id])
