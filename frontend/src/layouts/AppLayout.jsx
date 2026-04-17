@@ -18,6 +18,7 @@ import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { employeeAPI, departmentAPI } from '../services/api';
+import NotificationBell from '../components/notifications/NotificationBell';
 
 // ─── Navigation definitions ────────────────────────────────────────────────
 
@@ -29,6 +30,8 @@ const NAV_SUPER_ADMIN = [
   { to: '/settings',        label: 'System Config',   icon: 'tune' },
   { to: '/dev-tools',       label: 'Dev Tools',       icon: 'code' },
   { to: '/notifications',   label: 'Alerts',          icon: 'notifications' },
+  { to: '/announcements',   label: 'Announcements',   icon: 'campaign' },
+  { to: '/admin/meetings',  label: 'Meeting Alerts',  icon: 'event' },
 ];
 
 const NAV_HR_MANAGERIAL = [
@@ -44,6 +47,8 @@ const NAV_HR_MANAGERIAL = [
   { to: '/hardware',      label: 'Hardware',        icon: 'monitor_heart' },
   { to: '/settings',      label: 'HR Policies',     icon: 'policy' },
   { to: '/notifications', label: 'Notifications',   icon: 'notifications' },
+  { to: '/announcements', label: 'Announcements',   icon: 'campaign' },
+  { to: '/admin/meetings',label: 'Meeting Alerts',  icon: 'event' },
 ];
 
 const NAV_HR_PERSONAL = [
@@ -54,6 +59,8 @@ const NAV_HR_PERSONAL = [
   { to: '/my-schedule',   label: 'My Schedule',     icon: 'calendar_month' },
   { to: '/corrections',   label: 'My Corrections',  icon: 'edit_note' },
   { to: '/notifications', label: 'Notifications',   icon: 'notifications' },
+  { to: '/announcements', label: 'Announcements',   icon: 'campaign' },
+  { to: '/settings/notifications', label: 'Notification Settings', icon: 'notifications_active' },
 ];
 
 const NAV_MANAGER_MANAGERIAL = [
@@ -63,6 +70,7 @@ const NAV_MANAGER_MANAGERIAL = [
   { to: '/team-schedules',  label: 'Team Schedules',  icon: 'calendar_month' },
   { to: '/corrections',     label: 'Corrections',     icon: 'edit_note' },
   { to: '/notifications',   label: 'Notifications',   icon: 'notifications' },
+  { to: '/announcements',   label: 'Announcements',   icon: 'campaign' },
 ];
 
 const NAV_MANAGER_PERSONAL = [
@@ -83,6 +91,8 @@ const NAV_EMPLOYEE = [
   { to: '/my-schedule',   label: 'My Schedule',     icon: 'calendar_month' },
   { to: '/corrections',   label: 'My Corrections',  icon: 'edit_note' },
   { to: '/notifications', label: 'Notifications',   icon: 'notifications' },
+  { to: '/announcements', label: 'Announcements',   icon: 'campaign' },
+  { to: '/settings/notifications', label: 'Notification Settings', icon: 'notifications_active' },
 ];
 
 function getNavItems(role, portalMode) {
@@ -322,6 +332,7 @@ export default function AppLayout() {
         )}
 
         <div className="header-right">
+          <NotificationBell />
           <button className="btn-icon" onClick={toggleTheme} title="Toggle theme">
             <span className="material-symbols-outlined">
               {isDark ? 'light_mode' : 'dark_mode'}

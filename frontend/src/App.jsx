@@ -15,6 +15,10 @@ import AttendancePage from './pages/AttendancePage';
 import SchedulesPage from './pages/SchedulesPage';
 import CorrectionsPage from './pages/CorrectionsPage';
 import NotificationsPage from './pages/NotificationsPage';
+import NotificationCenter from './pages/NotificationCenter';
+import NotificationSettings from './pages/NotificationSettings';
+import MeetingAlerts from './pages/MeetingAlerts';
+import Announcements from './pages/Announcements';
 import EmergencyPage from './pages/EmergencyPage';
 import ScannersPage from './pages/ScannersPage';
 import AnalyticsPage from './pages/AnalyticsPage';
@@ -182,6 +186,14 @@ function App() {
                   <SettingsPage />
                 </RoleRoute>
               } />
+              
+              <Route path="settings/notifications" element={<NotificationSettings />} />
+
+              <Route path="admin/meetings" element={
+                <RoleRoute allowedRoles={['SUPER_ADMIN', 'HR_MANAGER']}>
+                  <MeetingAlerts />
+                </RoleRoute>
+              } />
 
               {/* Super Admin dev tools */}
               <Route path="dev-tools" element={
@@ -193,8 +205,11 @@ function App() {
               {/* Corrections - all roles but different views */}
               <Route path="corrections" element={<CorrectionsPage />} />
 
-              {/* Notifications - everyone */}
-              <Route path="notifications" element={<NotificationsPage />} />
+              {/* Announcements - everyone */}
+              <Route path="announcements" element={<Announcements />} />
+
+              {/* Notifications - mapped to the new NotificationCenter */}
+              <Route path="notifications" element={<NotificationCenter />} />
             </Route>
 
             {/* Catch-all */}

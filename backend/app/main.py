@@ -12,7 +12,7 @@ import logging
 
 from app.core.config import settings as app_settings
 from app.core.database import create_tables
-from app.api import auth, events, employees, attendance, schedules, corrections, notifications, emergency, scanners, settings, reports, calendar, productivity, hardware
+from app.api import auth, events, employees, attendance, schedules, corrections, notifications, notifications_v2, emergency, scanners, settings, reports, calendar, productivity, hardware
 
 # Configure logging
 logging.basicConfig(
@@ -106,6 +106,7 @@ app.include_router(attendance.router)
 app.include_router(schedules.router)
 app.include_router(corrections.router)
 app.include_router(notifications.router)
+app.include_router(notifications_v2.router)
 app.include_router(emergency.router)
 app.include_router(scanners.router)
 app.include_router(settings.router)
