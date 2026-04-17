@@ -22,12 +22,13 @@ import { employeeAPI, departmentAPI } from '../services/api';
 // ─── Navigation definitions ────────────────────────────────────────────────
 
 const NAV_SUPER_ADMIN = [
-  { to: '/',              label: 'Live Overview',   icon: 'pulse_alert' },
-  { to: '/scanners',      label: 'Scanners',        icon: 'sensors' },
-  { to: '/hardware',      label: 'Hardware Health', icon: 'monitor_heart' },
-  { to: '/settings',      label: 'System Config',   icon: 'tune' },
-  { to: '/dev-tools',     label: 'Dev Tools',       icon: 'code' },
-  { to: '/notifications', label: 'Alerts',          icon: 'notifications' },
+  { to: '/',                label: 'Live Overview',   icon: 'pulse_alert' },
+  { to: '/scanners',        label: 'Scanners',        icon: 'sensors' },
+  { to: '/hardware',        label: 'Hardware Health', icon: 'monitor_heart' },
+  { to: '/system-insights', label: 'System Insights', icon: 'shield_with_heart' },
+  { to: '/settings',        label: 'System Config',   icon: 'tune' },
+  { to: '/dev-tools',       label: 'Dev Tools',       icon: 'code' },
+  { to: '/notifications',   label: 'Alerts',          icon: 'notifications' },
 ];
 
 const NAV_HR_MANAGERIAL = [
@@ -38,6 +39,7 @@ const NAV_HR_MANAGERIAL = [
   { to: '/schedules',     label: 'Schedules',       icon: 'calendar_month' },
   { to: '/corrections',   label: 'Corrections',     icon: 'edit_note' },
   { to: '/analytics',     label: 'Analytics',       icon: 'monitoring' },
+  { to: '/company-insights', label: 'Company Insights', icon: 'donut_large' },
   { to: '/emergency',     label: 'Emergency',       icon: 'emergency' },
   { to: '/hardware',      label: 'Hardware',        icon: 'monitor_heart' },
   { to: '/settings',      label: 'HR Policies',     icon: 'policy' },
@@ -48,6 +50,7 @@ const NAV_HR_PERSONAL = [
   { to: '/',              label: 'Dashboard',       icon: 'grid_view' },
   { to: '/my-profile',    label: 'My Profile',      icon: 'person' },
   { to: '/my-attendance', label: 'My Attendance',   icon: 'event_available' },
+  { to: '/my-insights',   label: 'My Insights',     icon: 'analytics' },
   { to: '/my-schedule',   label: 'My Schedule',     icon: 'calendar_month' },
   { to: '/corrections',   label: 'My Corrections',  icon: 'edit_note' },
   { to: '/notifications', label: 'Notifications',   icon: 'notifications' },
@@ -66,6 +69,7 @@ const NAV_MANAGER_PERSONAL = [
   { to: '/',              label: 'Dashboard',       icon: 'grid_view' },
   { to: '/my-profile',    label: 'My Profile',      icon: 'person' },
   { to: '/my-attendance', label: 'My Attendance',   icon: 'event_available' },
+  { to: '/my-insights',   label: 'My Insights',     icon: 'analytics' },
   { to: '/my-schedule',   label: 'My Schedule',     icon: 'calendar_month' },
   { to: '/corrections',   label: 'My Corrections',  icon: 'edit_note' },
   { to: '/notifications', label: 'Notifications',   icon: 'notifications' },
@@ -75,6 +79,7 @@ const NAV_EMPLOYEE = [
   { to: '/',              label: 'Dashboard',       icon: 'grid_view' },
   { to: '/my-profile',    label: 'My Profile',      icon: 'person' },
   { to: '/my-attendance', label: 'My Attendance',   icon: 'event_available' },
+  { to: '/my-insights',   label: 'My Insights',     icon: 'analytics' },
   { to: '/my-schedule',   label: 'My Schedule',     icon: 'calendar_month' },
   { to: '/corrections',   label: 'My Corrections',  icon: 'edit_note' },
   { to: '/notifications', label: 'Notifications',   icon: 'notifications' },

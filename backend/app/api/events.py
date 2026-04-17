@@ -1438,3 +1438,254 @@ async def process_expired_transitions(db: AsyncSession) -> int:
     
     await db.commit()
     return auto_confirmed
+
+
+# ==================== SYSTEM INSIGHTS (SUPER_ADMIN, FR13, NFR6) ====================
+
+from app.models.hardware import ScannerHealthLog
+from app.models.audit import AuditLog
+from app.api.schemas import (
+    DataQualityKPI, HardwareHealthSummary, SecurityAlertItem,
+    AuditFeedItem, SystemInsightsResponse
+)
+from collections import defaultdict
+
+
+def _compute_data_quality(scan_events: list, scanners: list) -> DataQualityKPI:
+    """Aggregate scan event quality metrics for the Data Quality Dashboard."""
+    scanner_map = {s.scanner_id: s.name for s in scanners}
+
+    total = len(scan_events)
+    valid = sum(1 for e in scan_events if e.is_valid)
+    invalid = total - valid
+    duplicates = sum(
+        1 for e in scan_events if e.rejection_reason == "DUPLICATE")
+    unregistered = sum(
+        1 for e in scan_events if e.rejection_reason == "UNREGISTERED")
+    valid_rate = round((valid / total) * 100, 1) if total > 0 else 0.0
+
+    # By source breakdown
+    by_source: dict = defaultdict(int)
+    for e in scan_events:
+        by_source[e.event_source] += 1
+
+    # By scanner breakdown
+    scanner_counts: dict = defaultdict(lambda: {"total": 0, "invalid": 0})
+    for e in scan_events:
+        name = scanner_map.get(e.scanner_id, str(e.scanner_id)[:8])
+        scanner_counts[name]["total"] += 1
+        if not e.is_valid:
+            scanner_counts[name]["invalid"] += 1
+
+    by_scanner = [
+        {"scanner_name": n, "count": v["total"], "invalid_count": v["invalid"]}
+        for n, v in sorted(scanner_counts.items(),
+                           key=lambda x: x[1]["total"], reverse=True)
+    ]
+
+    return DataQualityKPI(
+        total_scans=total,
+        valid_scans=valid,
+        invalid_scans=invalid,
+        duplicate_scans=duplicates,
+        unregistered_attempts=unregistered,
+        valid_rate_pct=valid_rate,
+        by_source=dict(by_source),
+        by_scanner=by_scanner,
+    )
+
+
+def _compute_hardware_health(
+    scanners: list, health_logs: list
+) -> HardwareHealthSummary:
+    """Aggregate scanner status and recent health log metrics."""
+    total = len(scanners)
+    online = sum(1 for s in scanners if s.status == "ONLINE")
+    degraded = sum(1 for s in scanners if s.status == "DEGRADED")
+    offline = sum(1 for s in scanners if s.status == "OFFLINE")
+    uptime_pct = round((online / total) * 100, 1) if total > 0 else 0.0
+
+    # Response time and error rate from health logs
+    response_times = [
+        l.response_time_ms for l in health_logs
+        if l.response_time_ms is not None
+    ]
+    avg_rt = round(sum(response_times) / len(response_times), 1) \
+        if response_times else 0.0
+
+    # Per-scanner error rates
+    scanner_log_map: dict = defaultdict(lambda: {"total": 0, "errors": 0})
+    for l in health_logs:
+        scanner_log_map[l.scanner_id]["total"] += 1
+        if l.status != "ONLINE":
+            scanner_log_map[l.scanner_id]["errors"] += 1
+
+    scanner_detail_map = {s.scanner_id: s for s in scanners}
+    high_error_count = 0
+    scanner_rows = []
+    for sc in scanners:
+        logs = scanner_log_map.get(sc.scanner_id,
+                                   {"total": 0, "errors": 0})
+        log_total = logs["total"]
+        log_errors = logs["errors"]
+        err_rate = round(
+            (log_errors / log_total) * 100, 1) if log_total > 0 else 0.0
+        if err_rate > 5:
+            high_error_count += 1
+        scanner_rows.append({
+            "scanner_id": str(sc.scanner_id),
+            "name": sc.name,
+            "door_name": sc.door_name,
+            "status": sc.status,
+            "uptime_pct": uptime_pct,
+            "error_rate_pct": err_rate,
+            "last_heartbeat": sc.last_heartbeat.isoformat()
+            if sc.last_heartbeat else None,
+        })
+
+    return HardwareHealthSummary(
+        total_scanners=total,
+        online_count=online,
+        degraded_count=degraded,
+        offline_count=offline,
+        system_uptime_pct=uptime_pct,
+        avg_response_time_ms=avg_rt,
+        scanners_with_high_error_rate=high_error_count,
+        scanners=scanner_rows,
+    )
+
+
+def _compute_security_alerts(
+    scan_events: list, scanners: list
+) -> list:
+    """Find unauthorized access and off-hours scans and build alert list."""
+    scanner_map = {s.scanner_id: s for s in scanners}
+
+    alerts = []
+    unauthorized_by_scanner: dict = defaultdict(list)
+
+    for ev in scan_events:
+        sc = scanner_map.get(ev.scanner_id)
+        sc_name = sc.name if sc else "Unknown Scanner"
+        door_name = sc.door_name if sc else "Unknown Door"
+
+        if ev.rejection_reason == "UNREGISTERED":
+            unauthorized_by_scanner[ev.scanner_id].append(ev)
+            alerts.append(SecurityAlertItem(
+                alert_type="UNAUTHORIZED",
+                scanner_name=sc_name,
+                door_name=door_name,
+                scan_timestamp=ev.scan_timestamp,
+                fingerprint_hint=ev.fingerprint_hash[:8],
+                severity="CRITICAL",
+            ))
+        elif ev.is_valid:
+            # Off-hours detection: before 6 AM or after 10 PM
+            local_hour = ev.scan_timestamp.hour
+            if local_hour < 6 or local_hour >= 22:
+                alerts.append(SecurityAlertItem(
+                    alert_type="OFF_HOURS",
+                    scanner_name=sc_name,
+                    door_name=door_name,
+                    scan_timestamp=ev.scan_timestamp,
+                    fingerprint_hint=ev.fingerprint_hash[:8],
+                    severity="HIGH",
+                ))
+
+    # Flag scanners with 3+ unauthorized attempts
+    for sc_id, evs in unauthorized_by_scanner.items():
+        if len(evs) >= 3:
+            sc = scanner_map.get(sc_id)
+            alerts.append(SecurityAlertItem(
+                alert_type="REPEATED_UNAUTHORIZED",
+                scanner_name=sc.name if sc else "Unknown",
+                door_name=sc.door_name if sc else "Unknown",
+                scan_timestamp=evs[-1].scan_timestamp,
+                fingerprint_hint=f"{len(evs)} attempts",
+                severity="CRITICAL",
+            ))
+
+    # Sort: CRITICAL first, then newest
+    alerts.sort(
+        key=lambda a: (0 if a.severity == "CRITICAL" else 1,
+                       -a.scan_timestamp.timestamp()))
+    return alerts[:50]  # Cap at 50 most significant
+
+
+@router.get(
+    "/system-insights",
+    response_model=SystemInsightsResponse,
+    tags=["System Insights"]
+)
+async def get_system_insights(
+    days: int = 7,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserAccount = Depends(get_current_user),
+):
+    """Super Admin system health dashboard (FR13, NFR6).
+
+    Returns:
+    - Data quality KPIs: scan validity, duplicates, rejection reasons
+    - Hardware health: scanner status, uptime, error rates
+    - Security alerts: unauthorized access attempts, off-hours scans
+    - Audit feed: recent administrative action log
+    """
+    if current_user.role.name != "SUPER_ADMIN":
+        raise HTTPException(status_code=403, detail="Super Admin only")
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+
+    # ── Scan Events ────────────────────────────────────────────────────────
+    scan_events = (await db.execute(
+        select(ScanEvent)
+        .where(ScanEvent.scan_timestamp >= cutoff)
+        .order_by(ScanEvent.scan_timestamp.desc())
+    )).scalars().all()
+
+    # ── Scanners ───────────────────────────────────────────────────────────
+    scanners = (await db.execute(select(Scanner))).scalars().all()
+
+    # ── Health Logs ────────────────────────────────────────────────────────
+    health_logs = (await db.execute(
+        select(ScannerHealthLog)
+        .where(ScannerHealthLog.checked_at >= cutoff)
+    )).scalars().all()
+
+    # ── Audit Log feed ────────────────────────────────────────────────────
+    audit_rows = (await db.execute(
+        select(AuditLog)
+        .where(AuditLog.created_at >= cutoff)
+        .order_by(AuditLog.created_at.desc())
+        .limit(100)
+    )).scalars().all()
+
+    # Build actor name map
+    user_ids = {a.user_id for a in audit_rows if a.user_id}
+    user_map = {}
+    if user_ids:
+        from app.models.employee import UserAccount as UA
+        ua_rows = (await db.execute(
+            select(UA).where(UA.user_id.in_(user_ids))
+        )).scalars().all()
+        user_map = {u.user_id: u.email for u in ua_rows}
+
+    audit_feed = [
+        AuditFeedItem(
+            audit_id=a.audit_id,
+            action=a.action,
+            entity_type=a.entity_type,
+            actor_name=user_map.get(a.user_id),
+            ip_address=a.ip_address,
+            created_at=a.created_at,
+        )
+        for a in audit_rows
+    ]
+
+    return SystemInsightsResponse(
+        days_analyzed=days,
+        data_quality=_compute_data_quality(scan_events, scanners),
+        hardware_health=_compute_hardware_health(scanners, health_logs),
+        security_alerts=_compute_security_alerts(scan_events, scanners),
+        audit_feed=audit_feed,
+        generated_at=datetime.now(timezone.utc),
+    )

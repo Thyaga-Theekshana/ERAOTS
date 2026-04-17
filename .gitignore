@@ -2,11 +2,18 @@
 node_modules/
 __pycache__/
 *.pyc
+.pyo
 .pytest_cache/
+venv/
+.venv/
+backend/venv/
+backend/.venv/
 
 # Environment files
 .env
 .env.local
+backend/.env
+frontend/.env
 
 # IDE
 .vscode/
@@ -29,6 +36,11 @@ Thumbs.db
 
 # Logs
 *.log
+*.pid
+
+# Test coverage
+.coverage
+coverage/
 
 # Docker volumes
 eraots_pgdata/
