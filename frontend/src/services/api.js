@@ -185,8 +185,26 @@ export const correctionsAPI = {
 
 // ==================== NOTIFICATIONS ====================
 export const notificationsAPI = {
-  list: (limit = 10) => api.get("/api/notifications/", { params: { limit } }),
-  markRead: (id) => api.put(`/api/notifications/${id}/read`),
+  list: (params) => api.get("/api/notifications", { params }),
+  markRead: (id) => api.patch(`/api/notifications/${id}/read`),
+  markAllRead: () => api.patch("/api/notifications/read-all"),
+  getUnreadCount: () => api.get("/api/notifications/unread-count"),
+  getPreferences: () => api.get("/api/notifications/preferences"),
+  updatePreferences: (data) => api.put("/api/notifications/preferences", data),
+  getAnalytics: () => api.get("/api/notifications/analytics"),
+};
+
+// ==================== MEETINGS ====================
+export const meetingsAPI = {
+  create: (data) => api.post("/api/meetings", data),
+  list: () => api.get("/api/meetings"),
+  delete: (id) => api.delete(`/api/meetings/${id}`),
+};
+
+// ==================== ANNOUNCEMENTS ====================
+export const announcementsAPI = {
+  create: (data) => api.post("/api/announcements", data),
+  list: () => api.get("/api/announcements"),
 };
 
 // ==================== EMERGENCY ====================

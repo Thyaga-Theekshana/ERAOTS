@@ -41,6 +41,9 @@ from app.api.schemas import (
     MessageResponse,
 )
 from app.core.config import settings
+from app.core.alert_triggers import check_over_capacity, check_early_exits, unauthorized_access_alert
+from app.core.notification_tasks import task_check_long_break
+import asyncio
 
 router = APIRouter(prefix="/api/events", tags=["Scan Events"])
 logger = logging.getLogger(__name__)
@@ -201,6 +204,9 @@ async def receive_scan_event(
             "timestamp": scan_time.isoformat(),
         })
         
+        # Trigger Unauthorized Access Alert (FR1.3 / FR6)
+        asyncio.create_task(unauthorized_access_alert())
+        
         return ScanEventResponse(
             event_id=event.event_id,
             scanner_id=scan.scanner_id,
@@ -295,6 +301,17 @@ async def receive_scan_event(
         
         # HIERARCHY OF TRUTH: Biometric OUT aborts any pending calendar transitions
         await abort_pending_transitions(db, employee.employee_id, "BIOMETRIC_OUT")
+        
+        # Trigger check for early exit
+        asyncio.create_task(check_early_exits(employee.employee_id))
+        
+        # Schedule check for long break via Celery
+        # Assuming Break Threshold is 30 mins
+        task_check_long_break.apply_async(
+            args=[str(employee.employee_id)], 
+            countdown=settings.BREAK_THRESHOLD_MINUTES * 60
+        )
+        
     else:
         # Fallback for any unexpected status — treat as entry
         direction = "IN"
@@ -342,6 +359,10 @@ async def receive_scan_event(
         "status": occupancy_state.current_status,
         "timestamp": scan_time.isoformat(),
     })
+    
+    # Check over capacity if IN
+    if direction == "IN":
+        asyncio.create_task(check_over_capacity())
     
     return ScanEventResponse(
         event_id=event.event_id,

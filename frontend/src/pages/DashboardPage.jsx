@@ -12,6 +12,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { eventsAPI, attendanceAPI, createDashboardSocket, leaveAPI, productivityAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import NotificationAnalytics from '../components/notifications/NotificationAnalytics';
 
 export default function DashboardPage() {
   const navigate = useNavigate();
@@ -595,6 +596,9 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
+
+        {/* Notification Analytics Widget */}
+        <NotificationAnalytics />
 
         {/* Team Engagement Bar */}
         <div className="bento-engagement-card">

@@ -21,6 +21,11 @@ from app.models.emergency import EmergencyEvent, EmergencyHeadcount, SafetyCheck
 from app.models.hardware import Scanner, ScannerHealthLog
 from app.models.audit import AuditLog
 
+from app.models.alert_engine import (
+    NotificationTemplate, NotificationLog, AlertPreference,
+    MeetingAlert, AnnouncementAlert
+)
+
 __all__ = [
     "Employee", "Department", "Role", "UserAccount",
     "ScanEvent", "OccupancyState", "PendingStateTransition", "EmployeeCalendarSettings",
@@ -33,4 +38,6 @@ __all__ = [
     "EmergencyEvent", "EmergencyHeadcount", "SafetyCheckResponse",
     "Scanner", "ScannerHealthLog",
     "AuditLog",
+    "NotificationTemplate", "NotificationLog", "AlertPreference",
+    "MeetingAlert", "AnnouncementAlert",
 ]
