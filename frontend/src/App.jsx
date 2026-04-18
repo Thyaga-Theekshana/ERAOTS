@@ -28,6 +28,9 @@ import MySchedulePage from './pages/MySchedulePage';
 import TeamPage from './pages/TeamPage';
 import DevToolsPage from './pages/DevToolsPage';
 import PlaceholderPage from './pages/PlaceholderPage';
+import PersonalInsightsPage from './pages/PersonalInsightsPage';
+import CompanyInsightsPage from './pages/CompanyInsightsPage';
+import SystemInsightsPage from './pages/SystemInsightsPage';
 import './styles/index.css';
 import HardwarePage from './pages/Hardwarepage';
 
@@ -103,6 +106,7 @@ function App() {
               {/* Employee personal pages */}
               <Route path="my-profile" element={<ProfilePage />} />
               <Route path="my-attendance" element={<MyAttendancePage />} />
+              <Route path="my-insights" element={<PersonalInsightsPage />} />
               <Route path="my-schedule" element={<MySchedulePage />} />
 
               {/* Manager team pages */}
@@ -166,8 +170,18 @@ function App() {
                   <AnalyticsPage />
                 </RoleRoute>
               } />
-              <Route path="settings" element={
+              <Route path="company-insights" element={
                 <RoleRoute allowedRoles={['HR_MANAGER', 'SUPER_ADMIN']}>
+                  <CompanyInsightsPage />
+                </RoleRoute>
+              } />
+              <Route path="system-insights" element={
+                <RoleRoute allowedRoles={['SUPER_ADMIN']}>
+                  <SystemInsightsPage />
+                </RoleRoute>
+              } />
+              <Route path="settings" element={
+                <RoleRoute allowedRoles={['SUPER_ADMIN', 'HR_MANAGER']}>
                   <SettingsPage />
                 </RoleRoute>
               } />

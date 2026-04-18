@@ -8,6 +8,14 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 
+// Test accounts — 4 roles, aligned with the RBAC hierarchy
+const DEMO_ACCOUNTS = [
+  { label: 'Super Admin',  role: 'SUPER_ADMIN', email: 'superadmin@eraots.com', password: 'sup123' },
+  { label: 'HR Manager',  role: 'HR_MANAGER',  email: 'hr@eraots.com',         password: 'hr123'    },
+  { label: 'Dept Manager',role: 'MANAGER',     email: 'manager@eraots.com',    password: 'mgr123'   },
+  { label: 'Employee',    role: 'EMPLOYEE',    email: 'employee@eraots.com',   password: 'emp123'   },
+];
+
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -21,7 +29,6 @@ export default function LoginPage() {
     e.preventDefault();
     setError('');
     setLoading(true);
-
     try {
       await login(email, password);
       navigate('/');
@@ -32,12 +39,19 @@ export default function LoginPage() {
     }
   };
 
+  // Quick-fill a demo account without relying on browser autocomplete
+  const fillDemo = (account) => {
+    setEmail(account.email);
+    setPassword(account.password);
+    setError('');
+  };
+
   return (
     <div className="login-page">
       {/* Ambient Background */}
       <div className="login-ambient" />
       
-      {/* Theme Toggle - Top Right */}
+      {/* Theme Toggle */}
       <div className="login-theme-toggle">
         <button
           onClick={toggleTheme}
@@ -55,8 +69,8 @@ export default function LoginPage() {
         {/* Brand Header */}
         <div className="login-brand">
           <div className="login-brand-icon">
-            <span 
-              className="material-symbols-outlined" 
+            <span
+              className="material-symbols-outlined"
               style={{ fontSize: '2rem', fontVariationSettings: "'FILL' 1" }}
             >
               pulse_alert
@@ -72,7 +86,7 @@ export default function LoginPage() {
         <div className="login-welcome">
           <h2 className="login-title">Welcome Back</h2>
           <p className="login-subtitle">
-            Enterprise Real-Time Attendance & Occupancy Tracking System
+            Enterprise Real-Time Attendance &amp; Occupancy Tracking System
           </p>
         </div>
 
@@ -84,13 +98,14 @@ export default function LoginPage() {
           </div>
         )}
 
-        {/* Login Form */}
-        <form onSubmit={handleSubmit} className="login-form">
+        {/* Login Form — autocomplete="off" prevents browser from polluting fields between accounts */}
+        <form onSubmit={handleSubmit} className="login-form" autoComplete="off">
           <div className="login-field">
             <label className="login-label">Email Address</label>
             <div className="login-input-wrapper">
               <span className="material-symbols-outlined login-input-icon">mail</span>
               <input
+                id="login-email"
                 type="email"
                 className="login-input"
                 value={email}
@@ -98,7 +113,8 @@ export default function LoginPage() {
                 placeholder="Enter your email"
                 required
                 autoFocus
-                autoComplete="email"
+                autoComplete="off"
+                name="eraots-email"
               />
             </div>
           </div>
@@ -108,13 +124,15 @@ export default function LoginPage() {
             <div className="login-input-wrapper">
               <span className="material-symbols-outlined login-input-icon">lock</span>
               <input
+                id="login-password"
                 type="password"
                 className="login-input"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Enter your password"
                 required
-                autoComplete="current-password"
+                autoComplete="new-password"
+                name="eraots-password"
               />
             </div>
           </div>
@@ -138,25 +156,25 @@ export default function LoginPage() {
           </button>
         </form>
 
-        {/* Credentials Hint */}
+        {/* Demo Credential Pills — click to fill form; uses data-role for CSS color theming */}
         <div className="login-hint">
           <div className="login-hint-header">
-            <span className="material-symbols-outlined">info</span>
-            <span>Demo Credentials</span>
+            <span className="material-symbols-outlined">manage_accounts</span>
+            <span>Quick Access — Click to fill credentials</span>
           </div>
-          <div className="login-hint-credentials">
-            <div className="login-hint-row">
-              <span className="login-hint-label">Admin:</span>
-              <code>admin@eraots.com</code>
-              <span className="login-hint-divider">/</span>
-              <code>admin123</code>
-            </div>
-            <div className="login-hint-row">
-              <span className="login-hint-label">Employee:</span>
-              <code>employee@eraots.com</code>
-              <span className="login-hint-divider">/</span>
-              <code>employee123</code>
-            </div>
+          <div className="login-role-grid">
+            {DEMO_ACCOUNTS.map((acc) => (
+              <button
+                key={acc.email}
+                type="button"
+                data-role={acc.role}
+                className="login-role-pill"
+                onClick={() => fillDemo(acc)}
+              >
+                <span className="login-role-pill-label">{acc.label}</span>
+                <span className="login-role-pill-email">{acc.email}</span>
+              </button>
+            ))}
           </div>
         </div>
       </div>
@@ -171,3 +189,4 @@ export default function LoginPage() {
     </div>
   );
 }
+

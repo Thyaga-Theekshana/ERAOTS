@@ -81,6 +81,8 @@ class LeaveRequest(Base):
     start_date = Column(Date, nullable=False)
     end_date = Column(Date, nullable=False)
     reason = Column(Text, nullable=True)
+    is_half_day = Column(Boolean, nullable=False, default=False)
+    half_day_session = Column(String(2), nullable=True)  # AM or PM
     status = Column(String(20), nullable=False, default="PENDING")  # PENDING, APPROVED, REJECTED, CANCELLED
     reviewed_by = Column(GUID(), ForeignKey("employees.employee_id"), nullable=True)
     review_comment = Column(Text, nullable=True)

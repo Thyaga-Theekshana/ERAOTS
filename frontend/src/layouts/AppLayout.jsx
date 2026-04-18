@@ -1,7 +1,17 @@
 /**
- * AppLayout — Premium Glassmorphic Layout with Fixed Header + Sidebar
+ * AppLayout — Vigilant Glass Layout with Role-Aware Dual Portal Navigation.
+ *
  * Design System: Vigilant Glass (Bento + Glassmorphism)
- * Premium redesign for 1 Billion Tech pitch
+ * - Zero inline styles — every visual decision is a CSS class from index.css
+ * - Typography: Space Grotesk (font-headline) / Sora (font-body)
+ * - Icons: Material Symbols Outlined, filled weight for active states
+ * - No explicit border/divider lines — separation via tonal layers only
+ *
+ * Navigation Architecture:
+ *  SUPER_ADMIN → System nav + personal schedule (no portal toggle)
+ *  HR_MANAGER  → Managerial + personal schedule ↔ Personal portal toggle
+ *  MANAGER     → Team management (6 items) ↔ Personal (6 items) toggle
+ *  EMPLOYEE    → Personal pages only (6 items, no toggle)
  */
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
@@ -9,73 +19,129 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { employeeAPI, departmentAPI } from '../services/api';
 
-// Navigation items with role requirements
-const allNavItems = [
-  // Everyone can see dashboard
-  { to: '/', label: 'Dashboard', icon: 'grid_view', roles: ['EMPLOYEE', 'MANAGER', 'HR_MANAGER', 'SUPER_ADMIN'] },
-  
-  // Employee personal pages
-  { to: '/my-profile', label: 'My Profile', icon: 'person', roles: ['EMPLOYEE'] },
-  { to: '/my-attendance', label: 'My Attendance', icon: 'event_available', roles: ['EMPLOYEE'] },
-  { to: '/my-schedule', label: 'My Schedule', icon: 'calendar_month', roles: ['EMPLOYEE'] },
-  { to: '/corrections', label: 'My Corrections', icon: 'edit_note', roles: ['EMPLOYEE'] },
-  
-  // Manager department pages  
-  { to: '/team', label: 'My Team', icon: 'group', roles: ['MANAGER'] },
-  { to: '/team-attendance', label: 'Team Attendance', icon: 'event_available', roles: ['MANAGER'] },
-  { to: '/team-schedules', label: 'Team Schedules', icon: 'calendar_month', roles: ['MANAGER'] },
-  { to: '/corrections', label: 'Corrections', icon: 'edit_note', roles: ['MANAGER'] },
-  
-  // HR/Admin pages (full system access)
-  { to: '/employees', label: 'Directory', icon: 'groups', roles: ['HR_MANAGER', 'SUPER_ADMIN'] },
-  { to: '/departments', label: 'Departments', icon: 'corporate_fare', roles: ['HR_MANAGER', 'SUPER_ADMIN'] },
-  { to: '/attendance', label: 'Attendance', icon: 'event_available', roles: ['HR_MANAGER', 'SUPER_ADMIN'] },
-  { to: '/schedules', label: 'Schedules', icon: 'calendar_month', roles: ['HR_MANAGER', 'SUPER_ADMIN'] },
-  { to: '/corrections', label: 'Corrections', icon: 'edit_note', roles: ['HR_MANAGER', 'SUPER_ADMIN'] },
-  { to: '/scanners', label: 'Scanners', icon: 'sensors', roles: ['HR_MANAGER', 'SUPER_ADMIN'] },
+// ─── Navigation definitions ────────────────────────────────────────────────
 
-  // ✅ NEW: Hardware Monitoring
-  { to: '/hardware', label: 'Hardware Health', icon: 'monitor_heart', roles: ['HR_MANAGER', 'SUPER_ADMIN'] },
-
-  { to: '/emergency', label: 'Emergency', icon: 'emergency', roles: ['HR_MANAGER', 'SUPER_ADMIN'] },
-  { to: '/analytics', label: 'Analytics', icon: 'monitoring', roles: ['HR_MANAGER', 'SUPER_ADMIN'] },
-  { to: '/settings', label: 'Settings', icon: 'tune', roles: ['HR_MANAGER', 'SUPER_ADMIN'] },
-  
-  // Super Admin dev tools
-  { to: '/dev-tools', label: 'Dev Tools', icon: 'code', roles: ['SUPER_ADMIN'] },
-  
-  // Notifications for everyone
-  { to: '/notifications', label: 'Notifications', icon: 'notifications', roles: ['EMPLOYEE', 'MANAGER', 'HR_MANAGER', 'SUPER_ADMIN'] },
+const NAV_SUPER_ADMIN = [
+  { to: '/',                label: 'Live Overview',   icon: 'pulse_alert' },
+  { to: '/my-schedule',     label: 'My Schedule',     icon: 'calendar_month' },
+  { to: '/scanners',        label: 'Scanners',        icon: 'sensors' },
+  { to: '/hardware',        label: 'Hardware Health', icon: 'monitor_heart' },
+  { to: '/system-insights', label: 'System Insights', icon: 'shield_with_heart' },
+  { to: '/settings',        label: 'System Config',   icon: 'tune' },
+  { to: '/dev-tools',       label: 'Dev Tools',       icon: 'code' },
+  { to: '/notifications',   label: 'Alerts',          icon: 'notifications' },
 ];
 
-const getPageTitle = (pathname, navItems) => {
-  const route = navItems.find(item => item.to === pathname);
-  return route?.label || 'Dashboard';
-};
+const NAV_HR_MANAGERIAL = [
+  { to: '/',              label: 'Dashboard',       icon: 'grid_view' },
+  { to: '/my-schedule',   label: 'My Schedule',     icon: 'calendar_month' },
+  { to: '/employees',     label: 'Directory',       icon: 'groups' },
+  { to: '/departments',   label: 'Departments',     icon: 'corporate_fare' },
+  { to: '/attendance',    label: 'Attendance',      icon: 'event_available' },
+  { to: '/schedules',     label: 'Schedules',       icon: 'calendar_month' },
+  { to: '/corrections',   label: 'Corrections',     icon: 'edit_note' },
+  { to: '/analytics',     label: 'Analytics',       icon: 'monitoring' },
+  { to: '/company-insights', label: 'Company Insights', icon: 'donut_large' },
+  { to: '/emergency',     label: 'Emergency',       icon: 'emergency' },
+  { to: '/hardware',      label: 'Hardware',        icon: 'monitor_heart' },
+  { to: '/settings',      label: 'HR Policies',     icon: 'policy' },
+  { to: '/notifications', label: 'Notifications',   icon: 'notifications' },
+];
+
+const NAV_HR_PERSONAL = [
+  { to: '/',              label: 'Dashboard',       icon: 'grid_view' },
+  { to: '/my-profile',    label: 'My Profile',      icon: 'person' },
+  { to: '/my-attendance', label: 'My Attendance',   icon: 'event_available' },
+  { to: '/my-insights',   label: 'My Insights',     icon: 'analytics' },
+  { to: '/my-schedule',   label: 'My Schedule',     icon: 'calendar_month' },
+  { to: '/corrections',   label: 'My Corrections',  icon: 'edit_note' },
+  { to: '/notifications', label: 'Notifications',   icon: 'notifications' },
+];
+
+const NAV_MANAGER_MANAGERIAL = [
+  { to: '/',                label: 'Dashboard',       icon: 'grid_view' },
+  { to: '/team',            label: 'My Team',         icon: 'group' },
+  { to: '/team-attendance', label: 'Team Attendance', icon: 'event_available' },
+  { to: '/team-schedules',  label: 'Team Schedules',  icon: 'calendar_month' },
+  { to: '/corrections',     label: 'Corrections',     icon: 'edit_note' },
+  { to: '/notifications',   label: 'Notifications',   icon: 'notifications' },
+];
+
+const NAV_MANAGER_PERSONAL = [
+  { to: '/',              label: 'Dashboard',       icon: 'grid_view' },
+  { to: '/my-profile',    label: 'My Profile',      icon: 'person' },
+  { to: '/my-attendance', label: 'My Attendance',   icon: 'event_available' },
+  { to: '/my-insights',   label: 'My Insights',     icon: 'analytics' },
+  { to: '/my-schedule',   label: 'My Schedule',     icon: 'calendar_month' },
+  { to: '/corrections',   label: 'My Corrections',  icon: 'edit_note' },
+  { to: '/notifications', label: 'Notifications',   icon: 'notifications' },
+];
+
+const NAV_EMPLOYEE = [
+  { to: '/',              label: 'Dashboard',       icon: 'grid_view' },
+  { to: '/my-profile',    label: 'My Profile',      icon: 'person' },
+  { to: '/my-attendance', label: 'My Attendance',   icon: 'event_available' },
+  { to: '/my-insights',   label: 'My Insights',     icon: 'analytics' },
+  { to: '/my-schedule',   label: 'My Schedule',     icon: 'calendar_month' },
+  { to: '/corrections',   label: 'My Corrections',  icon: 'edit_note' },
+  { to: '/notifications', label: 'Notifications',   icon: 'notifications' },
+];
+
+function getNavItems(role, portalMode) {
+  switch (role) {
+    case 'SUPER_ADMIN': return NAV_SUPER_ADMIN;
+    case 'HR_MANAGER':  return portalMode === 'managerial' ? NAV_HR_MANAGERIAL : NAV_HR_PERSONAL;
+    case 'MANAGER':     return portalMode === 'managerial' ? NAV_MANAGER_MANAGERIAL : NAV_MANAGER_PERSONAL;
+    default:            return NAV_EMPLOYEE;
+  }
+}
+
+// Portal toggle: label + icon for the *destination* portal (what you'll switch TO)
+function getPortalToggleConfig(role, portalMode) {
+  if (portalMode === 'managerial') {
+    return { label: 'Personal Portal', icon: 'person' };
+  }
+  return role === 'HR_MANAGER'
+    ? { label: 'HR Management', icon: 'admin_panel_settings' }
+    : { label: 'Team Management', icon: 'group' };
+}
+
+// Sidebar brand tagline text
+function getSidebarTagline(role, portalMode) {
+  if (role === 'SUPER_ADMIN') return 'System Admin';
+  if (role === 'HR_MANAGER')  return portalMode === 'managerial' ? 'HR Management' : 'Personal View';
+  if (role === 'MANAGER')     return portalMode === 'managerial' ? 'Team Management' : 'Personal View';
+  return 'Vigilant Glass';
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export default function AppLayout() {
-  const { user, logout, isAdmin, isSuperAdmin } = useAuth();
+  const {
+    user, logout,
+    isAdmin, isSuperAdmin,
+    hasDualPortal, portalMode, togglePortalMode,
+  } = useAuth();
   const { toggleTheme, isDark } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
-  
-  // Filter nav items based on user role
-  const navItems = useMemo(() => {
-    const role = user?.role || 'EMPLOYEE';
-    return allNavItems.filter(item => item.roles.includes(role));
-  }, [user?.role]);
-  
-  // Global search state
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState([]);
-  const [showSearchResults, setShowSearchResults] = useState(false);
-  const [searchLoading, setSearchLoading] = useState(false);
+
+  const role       = user?.role || 'EMPLOYEE';
+  const navItems   = useMemo(() => getNavItems(role, portalMode), [role, portalMode]);
+  const toggleCfg  = useMemo(() => getPortalToggleConfig(role, portalMode), [role, portalMode]);
+  const tagline    = useMemo(() => getSidebarTagline(role, portalMode), [role, portalMode]);
+
+  // Global search
+  const [searchQuery, setSearchQuery]         = useState('');
+  const [searchResults, setSearchResults]     = useState([]);
+  const [showSearchResults, setShowSearch]    = useState(false);
+  const [searchLoading, setSearchLoading]     = useState(false);
   const searchRef = useRef(null);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (searchRef.current && !searchRef.current.contains(e.target)) {
-        setShowSearchResults(false);
+        setShowSearch(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -85,72 +151,56 @@ export default function AppLayout() {
   useEffect(() => {
     if (!searchQuery.trim()) {
       setSearchResults([]);
-      setShowSearchResults(false);
+      setShowSearch(false);
       return;
     }
-
     const timer = setTimeout(async () => {
       setSearchLoading(true);
       try {
         const canSearchAll = isAdmin || isSuperAdmin;
-        
-        const promises = canSearchAll 
-          ? [employeeAPI.list({ search: searchQuery }), departmentAPI.list()]
-          : [Promise.resolve({ data: [] }), Promise.resolve({ data: [] })];
-          
-        const [empRes, deptRes] = await Promise.all(promises);
-        
-        const employees = canSearchAll 
-          ? (empRes.data || []).slice(0, 5).map(e => ({
-              type: 'employee',
-              id: e.employee_id,
-              name: `${e.first_name} ${e.last_name}`,
-              subtitle: e.department_name || 'No Department',
-              icon: 'person',
-              path: '/employees'
-            }))
-          : [];
-        
-        const departments = canSearchAll 
-          ? (deptRes.data || [])
-              .filter(d => d.name.toLowerCase().includes(searchQuery.toLowerCase()))
-              .slice(0, 3)
-              .map(d => ({
-                type: 'department',
-                id: d.department_id,
-                name: d.name,
-                subtitle: `${d.employee_count || 0} members`,
-                icon: 'corporate_fare',
-                path: '/departments'
-              }))
-          : [];
-        
-        const navMatches = navItems
-          .filter(nav => nav.label.toLowerCase().includes(searchQuery.toLowerCase()))
+        const [empRes, deptRes] = await Promise.all([
+          canSearchAll ? employeeAPI.list({ search: searchQuery }) : Promise.resolve({ data: [] }),
+          canSearchAll ? departmentAPI.list() : Promise.resolve({ data: [] }),
+        ]);
+
+        const employees = (empRes.data || []).slice(0, 5).map(e => ({
+          type: 'employee', id: e.employee_id,
+          name: `${e.first_name} ${e.last_name}`,
+          sub: e.department_name || 'No Department',
+          icon: 'person', path: '/employees',
+        }));
+
+        const departments = (deptRes.data || [])
+          .filter(d => d.name.toLowerCase().includes(searchQuery.toLowerCase()))
           .slice(0, 3)
-          .map(nav => ({
-            type: 'page',
-            id: nav.to,
-            name: nav.label,
-            subtitle: 'Navigate to page',
-            icon: nav.icon,
-            path: nav.to
+          .map(d => ({
+            type: 'department', id: d.department_id,
+            name: d.name, sub: `${d.employee_count || 0} members`,
+            icon: 'corporate_fare', path: '/departments',
           }));
-        
+
+        const navMatches = navItems
+          .filter(n => n.label.toLowerCase().includes(searchQuery.toLowerCase()))
+          .slice(0, 3)
+          .map(n => ({
+            type: 'page', id: n.to,
+            name: n.label, sub: 'Navigate to page',
+            icon: n.icon, path: n.to,
+          }));
+
         setSearchResults([...employees, ...departments, ...navMatches]);
-        setShowSearchResults(true);
+        setShowSearch(true);
       } catch (err) {
         console.error('Search failed:', err);
       } finally {
         setSearchLoading(false);
       }
     }, 300);
-
     return () => clearTimeout(timer);
   }, [searchQuery, isAdmin, isSuperAdmin, navItems]);
 
   const handleSearchSelect = (result) => {
-    setShowSearchResults(false);
+    setShowSearch(false);
     setSearchQuery('');
     navigate(result.path);
   };
@@ -160,35 +210,55 @@ export default function AppLayout() {
     navigate('/login');
   };
 
-  const currentPage = getPageTitle(location.pathname, navItems);
+  const currentPage = navItems.find(i => i.to === location.pathname)?.label || 'Dashboard';
 
   return (
     <div className="app-container">
       <div className="app-ambient" aria-hidden="true" />
 
-      {/* Sidebar */}
+      {/* ── Sidebar ─────────────────────────────────────────── */}
       <aside className="app-sidebar">
+
+        {/* Brand */}
         <div className="sidebar-brand">
           <div className="sidebar-brand-icon">
-            <span className="material-symbols-outlined">pulse_alert</span>
+            <span
+              className="material-symbols-outlined"
+              style={{ fontVariationSettings: "'FILL' 1" }}
+            >
+              pulse_alert
+            </span>
           </div>
           <div className="sidebar-brand-text">
             <span className="sidebar-brand-name">ERAOTS</span>
-            <span className="sidebar-brand-tagline">Vigilant Glass</span>
+            <span className="sidebar-brand-tagline">{tagline}</span>
           </div>
         </div>
 
+        {/* Portal mode badge — HR / Manager only */}
+        {hasDualPortal && (
+          <div className={`portal-badge ${
+            portalMode === 'managerial' ? 'portal-badge--managerial' : 'portal-badge--personal'
+          }`}>
+            {portalMode === 'managerial' ? 'Managerial' : 'Personal'}
+          </div>
+        )}
+
+        {/* Navigation */}
         <nav className="sidebar-nav">
           {navItems.map((item) => (
             <NavLink
-              key={item.to}
+              key={`${item.to}-${item.label}`}
               to={item.to}
               end={item.to === '/'}
-              className={({ isActive }) => 
-                `sidebar-nav-item ${isActive ? 'sidebar-nav-item--active' : ''}`
+              className={({ isActive }) =>
+                `sidebar-nav-item${isActive ? ' sidebar-nav-item--active' : ''}`
               }
             >
-              <span className="material-symbols-outlined sidebar-nav-icon">
+              <span
+                className="material-symbols-outlined sidebar-nav-icon"
+                style={{ fontVariationSettings: "'FILL' 0, 'wght' 400" }}
+              >
                 {item.icon}
               </span>
               <span className="sidebar-nav-label">{item.label}</span>
@@ -196,13 +266,17 @@ export default function AppLayout() {
           ))}
         </nav>
 
-        <div className="sidebar-action">
-          <button className="sidebar-action-btn" onClick={() => navigate('/analytics')}>
-            <span className="sidebar-action-indicator" />
-            <span>Live Analytics</span>
-          </button>
-        </div>
+        {/* Portal toggle — HR Manager and Dept Manager only */}
+        {hasDualPortal && (
+          <div className="sidebar-portal-section">
+            <button className="portal-toggle-btn" onClick={togglePortalMode}>
+              <span className="material-symbols-outlined">{toggleCfg.icon}</span>
+              {toggleCfg.label}
+            </button>
+          </div>
+        )}
 
+        {/* Sidebar footer */}
         <div className="sidebar-footer">
           <button className="sidebar-footer-link" onClick={handleLogout}>
             <span className="material-symbols-outlined">logout</span>
@@ -211,12 +285,58 @@ export default function AppLayout() {
         </div>
       </aside>
 
-      {/* Header */}
+      {/* ── Header ──────────────────────────────────────────── */}
       <header className="app-header">
-        <h1>{currentPage}</h1>
+        <h1 className="header-title">{currentPage}</h1>
+
+        {/* Search — hidden for SUPER_ADMIN (maintenance user, not daily) */}
+        {role !== 'SUPER_ADMIN' && (
+          <div className="header-search" ref={searchRef}>
+            <span className="material-symbols-outlined header-search-icon">search</span>
+            <input
+              className="header-search-input"
+              type="text"
+              placeholder="Search…"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              onFocus={() => searchQuery && setShowSearch(true)}
+            />
+            {showSearchResults && searchResults.length > 0 && (
+              <div className="search-dropdown">
+                {searchResults.map(r => (
+                  <button
+                    key={r.id}
+                    className="search-dropdown-item"
+                    onClick={() => handleSearchSelect(r)}
+                  >
+                    <span className="material-symbols-outlined search-dropdown-item-icon">
+                      {r.icon}
+                    </span>
+                    <div>
+                      <div className="search-dropdown-item-name">{r.name}</div>
+                      <div className="search-dropdown-item-sub">{r.sub}</div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="header-right">
+          <button className="btn-icon" onClick={toggleTheme} title="Toggle theme">
+            <span className="material-symbols-outlined">
+              {isDark ? 'light_mode' : 'dark_mode'}
+            </span>
+          </button>
+          <div className="header-user-chip">
+            <span className="material-symbols-outlined">account_circle</span>
+            {user?.full_name?.split(' ')[0]}
+          </div>
+        </div>
       </header>
 
-      {/* Main */}
+      {/* ── Main content ────────────────────────────────────── */}
       <main className="app-main">
         <Outlet />
       </main>

@@ -55,6 +55,7 @@ async def create_employee(
         department_id=data.department_id,
         fingerprint_hash=hash_fingerprint(data.fingerprint_id) if data.fingerprint_id else None,
         hire_date=data.hire_date,
+        job_title=data.job_title,
     )
     db.add(employee)
     await db.flush()  # Get the employee ID
@@ -82,6 +83,7 @@ async def create_employee(
         email=employee.email,
         phone=employee.phone,
         department_id=employee.department_id,
+        job_title=employee.job_title,
         status=employee.status,
         hire_date=employee.hire_date,
         current_status="OUTSIDE",
@@ -131,6 +133,7 @@ async def list_employees(
             phone=emp.phone,
             department_id=emp.department_id,
             department_name=emp.department.name if emp.department else None,
+            job_title=emp.job_title,
             status=emp.status,
             hire_date=emp.hire_date,
             current_status=occ.current_status if occ else "OUTSIDE",
@@ -168,6 +171,7 @@ async def get_employee(
         phone=emp.phone,
         department_id=emp.department_id,
         department_name=emp.department.name if emp.department else None,
+        job_title=emp.job_title,
         status=emp.status,
         hire_date=emp.hire_date,
         current_status=occ.current_status if occ else "OUTSIDE",
@@ -199,6 +203,8 @@ async def update_employee(
         emp.department_id = data.department_id
     if data.fingerprint_id is not None:
         emp.fingerprint_hash = hash_fingerprint(data.fingerprint_id)
+    if data.job_title is not None:
+        emp.job_title = data.job_title
     if data.status is not None:
         emp.status = data.status.upper()
     
@@ -214,6 +220,7 @@ async def update_employee(
         email=emp.email,
         phone=emp.phone,
         department_id=emp.department_id,
+        job_title=emp.job_title,
         status=emp.status,
         hire_date=emp.hire_date,
         current_status=occ.current_status if occ else "OUTSIDE",

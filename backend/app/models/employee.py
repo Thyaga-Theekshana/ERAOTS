@@ -44,6 +44,7 @@ class Employee(Base):
     fingerprint_hash = Column(String(64), nullable=True, unique=True, index=True)
     profile_image_url = Column(String(500), nullable=True)
     hire_date = Column(Date, nullable=True)
+    job_title = Column(String(100), nullable=True)  # Free-text e.g. "DevOps Engineer", "QA Lead"
     status = Column(String(20), nullable=False, default="ACTIVE")  # ACTIVE, INACTIVE, TERMINATED
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))

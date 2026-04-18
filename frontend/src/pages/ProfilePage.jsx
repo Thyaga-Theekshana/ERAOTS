@@ -14,6 +14,7 @@ export default function ProfilePage() {
   const [formData, setFormData] = useState({
     phone: '',
     profile_image_url: '',
+    job_title: '',
   });
   const [passwordData, setPasswordData] = useState({
     currentPassword: '',
@@ -35,6 +36,7 @@ export default function ProfilePage() {
       setFormData({
         phone: user.phone || '',
         profile_image_url: user.profile_image_url || '',
+        job_title: user.job_title || '',
       });
       fetchStats();
       fetchCalendarSettings();
@@ -203,6 +205,20 @@ export default function ProfilePage() {
             <div className="profile-detail-row">
               <span className="material-symbols-outlined">email</span>
               <span>{user?.email}</span>
+            </div>
+            <div className="profile-detail-row">
+              <span className="material-symbols-outlined">work</span>
+              {editing ? (
+                <input
+                  type="text"
+                  className="profile-input"
+                  value={formData.job_title}
+                  onChange={(e) => setFormData({ ...formData, job_title: e.target.value })}
+                  placeholder="e.g. DevOps Engineer, QA Lead"
+                />
+              ) : (
+                <span>{user?.job_title || 'No job title set'}</span>
+              )}
             </div>
             <div className="profile-detail-row">
               <span className="material-symbols-outlined">phone</span>

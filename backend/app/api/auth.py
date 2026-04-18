@@ -24,6 +24,7 @@ class ProfileUpdate(BaseModel):
     """Schema for profile updates."""
     phone: Optional[str] = None
     profile_image_url: Optional[str] = None
+    job_title: Optional[str] = None  # Free-text, updateable for promotions
 
 
 class PasswordChange(BaseModel):
@@ -117,6 +118,7 @@ async def get_me(
         managed_department_name=managed_dept.name if managed_dept else None,
         phone=user.employee.phone,
         profile_image_url=user.employee.profile_image_url,
+        job_title=user.employee.job_title,
         permissions=user.role.permissions or {},
     )
 
@@ -143,6 +145,8 @@ async def update_profile(
         user.employee.phone = updates.phone
     if updates.profile_image_url is not None:
         user.employee.profile_image_url = updates.profile_image_url
+    if updates.job_title is not None:
+        user.employee.job_title = updates.job_title
     
     await db.commit()
     await db.refresh(user)
@@ -166,6 +170,7 @@ async def update_profile(
         managed_department_name=managed_dept.name if managed_dept else None,
         phone=user.employee.phone,
         profile_image_url=user.employee.profile_image_url,
+        job_title=user.employee.job_title,
         permissions=user.role.permissions or {},
     )
 
