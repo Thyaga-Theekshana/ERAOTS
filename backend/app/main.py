@@ -139,30 +139,166 @@ async def health_check():
 
 
 async def seed_initial_data():
-    """Seed roles, default admin, and scanners on first run."""
+    """Seed core roles/resources and ensure default admin credentials exist."""
     from app.core.database import AsyncSessionLocal
     from app.models.employee import Role, Employee, UserAccount
     from app.models.hardware import Scanner
     from app.core.security import hash_password, hash_fingerprint, generate_api_key, hash_api_key
     from sqlalchemy import select
+
+    superadmin_email = "superadmin@eraots.com"
+    superadmin_password = "sup123"
+    hr_email = "hr@eraots.com"
+    hr_password = "hr123"
     
     async with AsyncSessionLocal() as db:
+        seeded_fresh_db = False
+
         # Check if roles exist
         result = await db.execute(select(Role))
         if result.first():
-            logger.info("Database already seeded, skipping")
-            return
-        
-        logger.info("Seeding initial data...")
-        
-        # Create roles
-        roles = {
-            "SUPER_ADMIN": Role(
+            roles = {
+                role.name: role
+                for role in (await db.execute(select(Role))).scalars().all()
+            }
+        else:
+            seeded_fresh_db = True
+            logger.info("Seeding initial data...")
+            
+            # Create roles
+            roles = {
+                "SUPER_ADMIN": Role(
+                    name="SUPER_ADMIN",
+                    description="Full system access - configuration, hardware, policies, dev tools",
+                    permissions={"all": True, "dev_tools": True, "system_logs": True},
+                ),
+                "HR_MANAGER": Role(
+                    name="HR_MANAGER",
+                    description="Reports, attendance corrections, leave management, full system access",
+                    permissions={
+                        "view_all_attendance": True,
+                        "view_all_employees": True,
+                        "manage_employees": True,
+                        "manage_departments": True,
+                        "manage_schedules": True,
+                        "approve_leave": True,
+                        "approve_corrections": True,
+                        "generate_reports": True,
+                        "activate_emergency": True,
+                        "view_analytics": True,
+                        "manage_scanners": True,
+                    },
+                ),
+                "MANAGER": Role(
+                    name="MANAGER",
+                    description="Department manager - view and manage own department employees",
+                    permissions={
+                        "view_department_attendance": True,
+                        "view_department_employees": True,
+                        "approve_department_leave": True,
+                        "approve_department_corrections": True,
+                        "view_department_analytics": True,
+                        "view_own_attendance": True,
+                        "submit_leave": True,
+                        "submit_corrections": True,
+                    },
+                ),
+                "EMPLOYEE": Role(
+                    name="EMPLOYEE",
+                    description="View personal attendance, submit requests",
+                    permissions={
+                        "view_own_attendance": True,
+                        "submit_leave": True,
+                        "submit_corrections": True,
+                    },
+                ),
+            }
+            for role in roles.values():
+                db.add(role)
+            await db.flush()
+            
+            # Create default admin employee
+            admin = Employee(
+                first_name="System",
+                last_name="Admin",
+                email="admin@eraots.com",
+                phone="+94770000000",
+                fingerprint_hash=hash_fingerprint("ADMIN-FP-001"),
+                status="ACTIVE",
+            )
+            db.add(admin)
+            await db.flush()
+            
+            # Create admin user account
+            admin_account = UserAccount(
+                employee_id=admin.employee_id,
+                email="admin@eraots.com",
+                password_hash=hash_password("admin123"),
+                role_id=roles["SUPER_ADMIN"].role_id,
+            )
+            db.add(admin_account)
+            
+            # Create 2 door scanners
+            for i, (name, door) in enumerate([
+                ("Scanner Alpha", "Main Entrance"),
+                ("Scanner Beta", "Side Entry"),
+            ], 1):
+                api_key = generate_api_key()
+                scanner = Scanner(
+                    name=name,
+                    door_name=door,
+                    location_description=f"Door {i} - {door}",
+                    api_key_hash=hash_api_key(api_key),
+                    status="ONLINE",
+                )
+                db.add(scanner)
+                logger.info(f"  Scanner '{name}' created — API Key: {api_key}")
+
+        super_admin_role = roles.get("SUPER_ADMIN")
+        if not super_admin_role:
+            super_admin_role = Role(
                 name="SUPER_ADMIN",
                 description="Full system access - configuration, hardware, policies, dev tools",
                 permissions={"all": True, "dev_tools": True, "system_logs": True},
-            ),
-            "HR_MANAGER": Role(
+            )
+            db.add(super_admin_role)
+            await db.flush()
+
+        superadmin_account = (
+            await db.execute(select(UserAccount).where(UserAccount.email == superadmin_email))
+        ).scalar_one_or_none()
+
+        if superadmin_account:
+            superadmin_account.password_hash = hash_password(superadmin_password)
+            superadmin_account.role_id = super_admin_role.role_id
+            superadmin_account.is_active = True
+        else:
+            superadmin_employee = (
+                await db.execute(select(Employee).where(Employee.email == superadmin_email))
+            ).scalar_one_or_none()
+            if not superadmin_employee:
+                superadmin_employee = Employee(
+                    first_name="Super",
+                    last_name="Admin",
+                    email=superadmin_email,
+                    status="ACTIVE",
+                )
+                db.add(superadmin_employee)
+                await db.flush()
+
+            db.add(
+                UserAccount(
+                    employee_id=superadmin_employee.employee_id,
+                    email=superadmin_email,
+                    password_hash=hash_password(superadmin_password),
+                    role_id=super_admin_role.role_id,
+                    is_active=True,
+                )
+            )
+
+        hr_role = roles.get("HR_MANAGER")
+        if not hr_role:
+            hr_role = Role(
                 name="HR_MANAGER",
                 description="Reports, attendance corrections, leave management, full system access",
                 permissions={
@@ -178,72 +314,46 @@ async def seed_initial_data():
                     "view_analytics": True,
                     "manage_scanners": True,
                 },
-            ),
-            "MANAGER": Role(
-                name="MANAGER",
-                description="Department manager - view and manage own department employees",
-                permissions={
-                    "view_department_attendance": True,
-                    "view_department_employees": True,
-                    "approve_department_leave": True,
-                    "approve_department_corrections": True,
-                    "view_department_analytics": True,
-                    "view_own_attendance": True,
-                    "submit_leave": True,
-                    "submit_corrections": True,
-                },
-            ),
-            "EMPLOYEE": Role(
-                name="EMPLOYEE",
-                description="View personal attendance, submit requests",
-                permissions={
-                    "view_own_attendance": True,
-                    "submit_leave": True,
-                    "submit_corrections": True,
-                },
-            ),
-        }
-        for role in roles.values():
-            db.add(role)
-        await db.flush()
-        
-        # Create default admin employee
-        admin = Employee(
-            first_name="System",
-            last_name="Admin",
-            email="admin@eraots.com",
-            phone="+94770000000",
-            fingerprint_hash=hash_fingerprint("ADMIN-FP-001"),
-            status="ACTIVE",
-        )
-        db.add(admin)
-        await db.flush()
-        
-        # Create admin user account
-        admin_account = UserAccount(
-            employee_id=admin.employee_id,
-            email="admin@eraots.com",
-            password_hash=hash_password("admin123"),
-            role_id=roles["SUPER_ADMIN"].role_id,
-        )
-        db.add(admin_account)
-        
-        # Create 2 door scanners
-        for i, (name, door) in enumerate([
-            ("Scanner Alpha", "Main Entrance"),
-            ("Scanner Beta", "Side Entry"),
-        ], 1):
-            api_key = generate_api_key()
-            scanner = Scanner(
-                name=name,
-                door_name=door,
-                location_description=f"Door {i} - {door}",
-                api_key_hash=hash_api_key(api_key),
-                status="ONLINE",
             )
-            db.add(scanner)
-            logger.info(f"  Scanner '{name}' created — API Key: {api_key}")
-        
+            db.add(hr_role)
+            await db.flush()
+
+        hr_account = (
+            await db.execute(select(UserAccount).where(UserAccount.email == hr_email))
+        ).scalar_one_or_none()
+
+        if hr_account:
+            hr_account.password_hash = hash_password(hr_password)
+            hr_account.role_id = hr_role.role_id
+            hr_account.is_active = True
+        else:
+            hr_employee = (
+                await db.execute(select(Employee).where(Employee.email == hr_email))
+            ).scalar_one_or_none()
+            if not hr_employee:
+                hr_employee = Employee(
+                    first_name="HR",
+                    last_name="Manager",
+                    email=hr_email,
+                    status="ACTIVE",
+                )
+                db.add(hr_employee)
+                await db.flush()
+
+            db.add(
+                UserAccount(
+                    employee_id=hr_employee.employee_id,
+                    email=hr_email,
+                    password_hash=hash_password(hr_password),
+                    role_id=hr_role.role_id,
+                    is_active=True,
+                )
+            )
+
         await db.commit()
-        logger.info("Initial data seeded successfully!")
-        logger.info("  Default admin: admin@eraots.com / admin123")
+
+        if seeded_fresh_db:
+            logger.info("Initial data seeded successfully!")
+            logger.info("  Default admin: admin@eraots.com / admin123")
+        logger.info(f"  Super admin credentials ensured: {superadmin_email} / {superadmin_password}")
+        logger.info(f"  HR manager credentials ensured: {hr_email} / {hr_password}")

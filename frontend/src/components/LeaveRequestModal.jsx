@@ -114,7 +114,16 @@ export default function LeaveRequestModal({ selectedDate, leaveTypes, leaveBalan
         onSubmit();
       }, 1500);
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to submit leave request. Please try again.');
+      const detail = err.response?.data?.detail;
+      if (Array.isArray(detail)) {
+        const firstIssue = detail[0];
+        const issueText = firstIssue?.msg || firstIssue?.message;
+        setError(issueText || 'Failed to submit leave request. Please check your input and try again.');
+      } else if (typeof detail === 'string') {
+        setError(detail);
+      } else {
+        setError('Failed to submit leave request. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
