@@ -13,7 +13,10 @@ import EmployeesPage from './pages/EmployeesPage';
 import DepartmentsPage from './pages/DepartmentsPage';
 import AttendancePage from './pages/AttendancePage';
 import SchedulesPage from './pages/SchedulesPage';
-import CorrectionsPage from './pages/CorrectionsPage';
+import CorrectionFormPage from './pages/CorrectionFormPage';
+import MyCorrectionsPage from './pages/MyCorrectionsPage';
+import ManagerApprovalPage from './pages/ManagerApprovalPage';
+import HRApprovalPage from './pages/HRApprovalPage';
 import NotificationsPage from './pages/NotificationsPage';
 import NotificationCenter from './pages/NotificationCenter';
 import NotificationSettings from './pages/NotificationSettings';
@@ -202,8 +205,19 @@ function App() {
                 </RoleRoute>
               } />
 
-              {/* Corrections - all roles but different views */}
-              <Route path="corrections" element={<CorrectionsPage />} />
+              {/* Corrections - specific views */}
+              <Route path="corrections/request" element={<CorrectionFormPage />} />
+              <Route path="corrections/my" element={<MyCorrectionsPage />} />
+              <Route path="corrections/manager" element={
+                <RoleRoute allowedRoles={['MANAGER', 'HR_MANAGER', 'SUPER_ADMIN']}>
+                  <ManagerApprovalPage />
+                </RoleRoute>
+              } />
+              <Route path="corrections/hr" element={
+                <RoleRoute allowedRoles={['HR_MANAGER', 'SUPER_ADMIN']}>
+                  <HRApprovalPage />
+                </RoleRoute>
+              } />
 
               {/* Announcements - everyone */}
               <Route path="announcements" element={<Announcements />} />

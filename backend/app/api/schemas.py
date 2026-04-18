@@ -336,7 +336,12 @@ class CorrectionRequestResponse(BaseModel):
     status: str
     reason: str
     proposed_time: datetime
-    reviewed_by: Optional[UUID] = None
+    manager_id: Optional[UUID] = None
+    manager_name: Optional[str] = None
+    manager_comment: Optional[str] = None
+    hr_id: Optional[UUID] = None
+    hr_name: Optional[str] = None
+    hr_comment: Optional[str] = None
     created_at: datetime
 
     class Config:
