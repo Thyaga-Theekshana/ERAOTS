@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, func, desc
 from typing import List, Optional
@@ -6,11 +6,10 @@ import uuid
 from datetime import datetime, timezone
 import json
 
-from app.core.database import get_db
+from app.core.database import get_db, AsyncSessionLocal
 from app.core.dependencies import get_current_user, require_roles
 from app.models.employee import UserAccount, Employee
 from app.models.alert_engine import NotificationLog, AlertPreference, MeetingAlert, AnnouncementAlert
-from app.core.notification_tasks import task_dispatch_announcement
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/api", tags=["Notifications V2"])
@@ -199,9 +198,11 @@ async def delete_meeting(meeting_id: uuid.UUID, db: AsyncSession = Depends(get_d
 @router.post("/announcements", dependencies=[Depends(require_roles(["SUPER_ADMIN", "HR_MANAGER"]))])
 async def create_announcement(
     data: AnnouncementCreate,
+    background_tasks: BackgroundTasks,
     current_user: UserAccount = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
+    """Create and dispatch an announcement (FR6). Uses FastAPI BackgroundTasks — no Celery needed."""
     ann = AnnouncementAlert(
         title=data.title,
         body=data.body,
@@ -213,14 +214,19 @@ async def create_announcement(
     )
     db.add(ann)
     await db.flush()
-    
-    if not data.scheduled_at:
-        task_dispatch_announcement.delay(str(ann.announcement_alert_id))
-    else:
-        task_dispatch_announcement.apply_async(args=[str(ann.announcement_alert_id)], eta=data.scheduled_at)
-        
+    ann_id = str(ann.announcement_alert_id)
     await db.commit()
-    return {"success": True, "announcement_id": ann.announcement_alert_id}
+
+    # Dispatch in background via FastAPI BackgroundTasks (no Celery broker required).
+    # For immediate announcements only — scheduled ones require infrastructure (Redis + Celery Beat).
+    if not data.scheduled_at:
+        async def _dispatch():
+            from app.core.alert_triggers import announcement_dispatcher
+            async with AsyncSessionLocal() as session:
+                await announcement_dispatcher(ann_id, session)
+        background_tasks.add_task(_dispatch)
+
+    return {"success": True, "announcement_id": ann_id}
 
 @router.get("/announcements")
 async def get_announcements(

@@ -2,7 +2,6 @@
 ERAOTS — FastAPI Application Entry Point.
 Enterprise Real-Time Attendance & Occupancy Tracking System.
 """
-from sched import scheduler
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,7 +11,7 @@ import logging
 
 from app.core.config import settings as app_settings
 from app.core.database import create_tables
-from app.api import auth, events, employees, attendance, schedules, corrections, notifications, notifications_v2, emergency, scanners, settings, reports, calendar, productivity, hardware
+from app.api import auth, events, employees, attendance, schedules, corrections, notifications_v2, emergency, scanners, settings, reports, calendar, productivity, hardware
 
 # Configure logging
 logging.basicConfig(
@@ -105,7 +104,6 @@ app.include_router(employees.router)
 app.include_router(attendance.router)
 app.include_router(schedules.router)
 app.include_router(corrections.router)
-app.include_router(notifications.router)
 app.include_router(notifications_v2.router)
 app.include_router(emergency.router)
 app.include_router(scanners.router)

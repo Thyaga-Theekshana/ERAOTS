@@ -133,6 +133,7 @@ ERAOTS is a standalone, self-contained system. It receives input from biometric 
 |------|------------|----------------|
 | **Super Admin** | IT staff configuring the system, managing hardware, and system policies | High |
 | **HR Manager** | HR personnel accessing reports, approving corrections, managing schedules | Low-Medium |
+| **Department Manager** | Department head managing their team's attendance, schedules, and approving corrections/leave within their department. Has a dual portal (managerial + personal). | Low-Medium |
 | **Employee** | Regular staff viewing personal attendance and submitting requests | Low |
 
 ### 2.4 Constraints

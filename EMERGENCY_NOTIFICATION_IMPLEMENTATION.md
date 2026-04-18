@@ -1,1 +1,0 @@
-Complete implementation documentation and guide

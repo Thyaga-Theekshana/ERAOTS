@@ -10,8 +10,9 @@ export default function NotificationsPage() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const res = await notificationsAPI.list(50);
-      setNotifications(res.data);
+      const res = await notificationsAPI.list({ limit: 50 });
+      // notifications_v2 returns { total, items } shape
+      setNotifications(res.data?.items || res.data || []);
     } catch (err) {
       console.error("Failed to fetch notifications", err);
     } finally {
@@ -23,8 +24,8 @@ export default function NotificationsPage() {
     fetchData();
   }, []);
 
-  const handleMarkRead = async (id, currentStatus) => {
-    if (currentStatus) return;
+  const handleMarkRead = async (id, readAt) => {
+    if (readAt) return;  // already read
     try {
       await notificationsAPI.markRead(id);
       fetchData();
@@ -50,20 +51,27 @@ export default function NotificationsPage() {
     }
   };
 
-  const unreadCount = notifications.filter(n => !n.is_read).length;
+  // unread = read_at is null (NotificationLog schema)
+  const unreadCount = notifications.filter(n => !n.read_at).length;
 
-  const getNotificationIcon = (type) => {
-    switch (type) {
+  const getNotificationIcon = (triggerType) => {
+    switch (triggerType) {
       case 'SAFETY_CHECK': return 'health_and_safety';
-      case 'alert': return 'warning';
-      case 'success': return 'check_circle';
-      case 'info': return 'info';
+      case 'LATE_ARRIVAL': return 'schedule';
+      case 'ABSENT': return 'person_off';
+      case 'EARLY_EXIT': return 'directions_run';
+      case 'LONG_BREAK': return 'coffee';
+      case 'UNAUTHORIZED': return 'gpp_bad';
+      case 'DEVICE_OFFLINE': return 'router';
+      case 'MEETING_REMINDER': return 'event';
+      case 'ANNOUNCEMENT': return 'campaign';
       default: return 'notifications';
     }
   };
 
+  // Safety check notifs use triggered_by field from NotificationLog
   const isSafetyCheck = (notif) => {
-    return notif.notification_type === 'SAFETY_CHECK';
+    return notif.triggered_by === 'SAFETY_CHECK';
   };
 
   return (
@@ -106,14 +114,16 @@ export default function NotificationsPage() {
           <div className="notifications-list">
             {notifications.map(notif => {
               const isSafety = isSafetyCheck(notif);
-              const respondedStatus = respondedIds[notif.notification_id];
-              const alreadyResponded = respondedStatus || (isSafety && notif.is_read);
+              // Use log_id (NotificationLog) as unique key
+              const notifId = notif.log_id || notif.notification_id;
+              const respondedStatus = respondedIds[notifId];
+              const alreadyResponded = respondedStatus || (isSafety && notif.read_at);
 
               if (isSafety) {
                 return (
                   <div
-                    key={notif.notification_id}
-                    className={`safety-notification-card ${!notif.is_read && !respondedStatus ? 'safety-notification-card--active' : 'safety-notification-card--responded'}`}
+                    key={notifId}
+                    className={`safety-notification-card ${!notif.read_at && !respondedStatus ? 'safety-notification-card--active' : 'safety-notification-card--responded'}`}
                   >
                     <div className="safety-notification-header">
                       <div className="safety-notification-icon-wrap">
@@ -122,14 +132,14 @@ export default function NotificationsPage() {
                       <div className="safety-notification-info">
                         <h3 className="safety-notification-title">{notif.title}</h3>
                         <span className="safety-notification-time">
-                          {new Date(notif.created_at).toLocaleString()}
+                          {new Date(notif.sent_at || notif.created_at).toLocaleString()}
                         </span>
                       </div>
                     </div>
-                    <p className="safety-notification-message">{notif.message}</p>
+                    <p className="safety-notification-message">{notif.body || notif.message}</p>
 
                     {alreadyResponded ? (
-                      <div className={`safety-notification-responded ${respondedStatus === 'SAFE' || notif.is_read ? 'safety-notification-responded--safe' : 'safety-notification-responded--danger'}`}>
+                      <div className={`safety-notification-responded ${respondedStatus === 'SAFE' || notif.read_at ? 'safety-notification-responded--safe' : 'safety-notification-responded--danger'}`}>
                         <span className="material-symbols-outlined">
                           {respondedStatus === 'IN_DANGER' ? 'warning' : 'verified_user'}
                         </span>
@@ -143,19 +153,19 @@ export default function NotificationsPage() {
                       <div className="safety-notification-actions">
                         <button
                           className="btn safety-btn-safe"
-                          onClick={() => handleSafetyResponse(notif.notification_id, 'YES')}
-                          disabled={respondingId === notif.notification_id}
+                          onClick={() => handleSafetyResponse(notifId, 'YES')}
+                          disabled={respondingId === notifId}
                         >
                           <span className="material-symbols-outlined">verified_user</span>
-                          {respondingId === notif.notification_id ? 'Sending...' : "Yes, I'm Safe"}
+                          {respondingId === notifId ? 'Sending...' : "Yes, I'm Safe"}
                         </button>
                         <button
                           className="btn safety-btn-danger"
-                          onClick={() => handleSafetyResponse(notif.notification_id, 'NO')}
-                          disabled={respondingId === notif.notification_id}
+                          onClick={() => handleSafetyResponse(notifId, 'NO')}
+                          disabled={respondingId === notifId}
                         >
                           <span className="material-symbols-outlined">warning</span>
-                          {respondingId === notif.notification_id ? 'Sending...' : 'No, I Need Help'}
+                          {respondingId === notifId ? 'Sending...' : 'No, I Need Help'}
                         </button>
                       </div>
                     )}
@@ -166,25 +176,25 @@ export default function NotificationsPage() {
               // Regular notification
               return (
                 <div
-                  key={notif.notification_id}
-                  className={`notification-item ${!notif.is_read ? 'notification-item--unread' : ''}`}
-                  onClick={() => handleMarkRead(notif.notification_id, notif.is_read)}
+                  key={notifId}
+                  className={`notification-item ${!notif.read_at ? 'notification-item--unread' : ''}`}
+                  onClick={() => handleMarkRead(notifId, notif.read_at)}
                 >
                   <div className="notification-indicator">
-                    <span className={`material-symbols-outlined notification-icon ${!notif.is_read ? 'notification-icon--unread' : ''}`}>
-                      {getNotificationIcon(notif.type)}
+                    <span className={`material-symbols-outlined notification-icon ${!notif.read_at ? 'notification-icon--unread' : ''}`}>
+                      {getNotificationIcon(notif.triggered_by)}
                     </span>
                   </div>
                   <div className="notification-content">
                     <div className="notification-header">
                       <h3 className="notification-title">{notif.title}</h3>
                       <span className="notification-time">
-                        {new Date(notif.created_at).toLocaleString()}
+                        {new Date(notif.sent_at || notif.created_at).toLocaleString()}
                       </span>
                     </div>
-                    <p className="notification-message">{notif.message}</p>
+                    <p className="notification-message">{notif.body || notif.message}</p>
                   </div>
-                  {!notif.is_read && (
+                  {!notif.read_at && (
                     <div className="notification-unread-dot"></div>
                   )}
                 </div>

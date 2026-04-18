@@ -11449,4 +11449,444 @@ tbody tr:hover {
   .si-scanner-grid {
     grid-template-columns: 1fr;
   }
-}
+}
+
+/* =====================================================
+   EMERGENCY NOTIFICATION MODAL — FR9.4
+   Full-screen glass overlay for employee safety check
+   ===================================================== */
+
+.emergency-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 10, 18, 0.88);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  padding: 1.5rem;
+}
+
+.emergency-modal-card {
+  background: var(--surface-glass, rgba(255,255,255,0.06));
+  border: 1px solid rgba(255, 80, 80, 0.35);
+  border-radius: var(--radius-xl, 1.5rem);
+  padding: 2.5rem;
+  max-width: 560px;
+  width: 100%;
+  box-shadow: 0 24px 64px rgba(255, 60, 60, 0.18), 0 0 0 1px rgba(255,255,255,0.05) inset;
+  animation: emergency-slide-in 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.emergency-modal-card--pulse {
+  box-shadow: 0 24px 64px rgba(255, 60, 60, 0.32), 0 0 0 1px rgba(255,255,255,0.05) inset;
+  border-color: rgba(255, 80, 80, 0.6);
+}
+
+@keyframes emergency-slide-in {
+  from { opacity: 0; transform: scale(0.94) translateY(20px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.emergency-modal-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.25rem;
+  margin-bottom: 1.75rem;
+}
+
+.emergency-modal-icon {
+  font-size: 3rem;
+  color: hsl(0 85% 65%);
+  flex-shrink: 0;
+  animation: emergency-pulse-icon 1.5s ease-in-out infinite;
+}
+
+@keyframes emergency-pulse-icon {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.6; }
+}
+
+.emergency-modal-header-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.emergency-modal-title {
+  font-family: var(--font-headline, 'Space Grotesk', sans-serif);
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-primary, #e8eaf0);
+  margin: 0;
+  line-height: 1.2;
+}
+
+.emergency-modal-subtitle {
+  font-size: 0.875rem;
+  color: var(--text-muted, #8890a4);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.emergency-modal-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  background: rgba(255,255,255,0.04);
+  border-radius: var(--radius-md, 0.75rem);
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.emergency-modal-detail-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.875rem;
+  color: var(--text-secondary, #b0b8cc);
+}
+
+.emergency-modal-detail-row .material-symbols-outlined {
+  font-size: 1rem;
+  color: var(--text-muted, #8890a4);
+}
+
+.emergency-modal-cta {
+  font-family: var(--font-headline, 'Space Grotesk', sans-serif);
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-primary, #e8eaf0);
+  text-align: center;
+  margin-bottom: 1.25rem;
+}
+
+.emergency-modal-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.875rem;
+  margin-bottom: 1.25rem;
+}
+
+.emergency-btn-safe {
+  background: linear-gradient(135deg, hsl(142 70% 35%), hsl(142 70% 28%));
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-md, 0.75rem);
+  padding: 0.875rem 1rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  transition: filter 0.2s ease, transform 0.15s ease;
+}
+
+.emergency-btn-safe:hover:not(:disabled) {
+  filter: brightness(1.15);
+  transform: translateY(-1px);
+}
+
+.emergency-btn-danger {
+  background: linear-gradient(135deg, hsl(0 80% 45%), hsl(0 80% 36%));
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-md, 0.75rem);
+  padding: 0.875rem 1rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  transition: filter 0.2s ease, transform 0.15s ease;
+}
+
+.emergency-btn-danger:hover:not(:disabled) {
+  filter: brightness(1.15);
+  transform: translateY(-1px);
+}
+
+.emergency-btn-safe:disabled,
+.emergency-btn-danger:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.emergency-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  font-size: 0.775rem;
+  color: var(--text-muted, #8890a4);
+  margin: 0;
+}
+
+.emergency-modal-footer .material-symbols-outlined {
+  font-size: 0.9rem;
+}
+
+/* =====================================================
+   IN-DANGER EMPLOYEES LIST — FR9.3
+   Reusable headcount tracking component
+   ===================================================== */
+
+.in-danger-list {
+  width: 100%;
+}
+
+.in-danger-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 3rem 1rem;
+  color: var(--text-muted, #8890a4);
+  font-size: 0.95rem;
+}
+
+.in-danger-empty .material-symbols-outlined {
+  font-size: 2.5rem;
+  color: hsl(142 70% 50%);
+}
+
+.in-danger-section {
+  margin-bottom: 2rem;
+}
+
+.in-danger-section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--font-headline, 'Space Grotesk', sans-serif);
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: hsl(0 80% 65%);
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid rgba(255, 80, 80, 0.2);
+}
+
+.in-danger-section-title--safe {
+  color: hsl(142 60% 55%);
+  border-color: rgba(60, 200, 100, 0.2);
+}
+
+.in-danger-row {
+  background: rgba(255, 60, 60, 0.04);
+}
+
+.in-danger-row:hover {
+  background: rgba(255, 60, 60, 0.08);
+}
+
+.in-danger-accounted-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.in-danger-accounted-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.75rem;
+  background: rgba(60, 200, 100, 0.05);
+  border-radius: var(--radius-sm, 0.5rem);
+  font-size: 0.875rem;
+}
+
+.in-danger-accounted-icon {
+  font-size: 1rem;
+  color: hsl(142 60% 55%);
+  flex-shrink: 0;
+}
+
+.in-danger-accounted-name {
+  color: var(--text-secondary, #b0b8cc);
+  flex: 1;
+}
+
+.in-danger-accounted-time {
+  font-size: 0.775rem;
+  color: var(--text-muted, #8890a4);
+  font-variant-numeric: tabular-nums;
+}
+
+/* =====================================================
+   NOTIFICATION PAGE — Safety notification cards
+   Uses NotificationLog (notifications_v2) schema
+   ===================================================== */
+
+.safety-notification-card {
+  background: rgba(255, 60, 60, 0.06);
+  border: 1px solid rgba(255, 80, 80, 0.3);
+  border-radius: var(--radius-lg, 1rem);
+  padding: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.safety-notification-card--active {
+  border-color: rgba(255, 80, 80, 0.55);
+  animation: safety-card-pulse 2s ease-in-out infinite;
+}
+
+.safety-notification-card--responded {
+  background: rgba(255,255,255,0.03);
+  border-color: rgba(255,255,255,0.1);
+}
+
+@keyframes safety-card-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 60, 60, 0); }
+  50%       { box-shadow: 0 0 0 6px rgba(255, 60, 60, 0.12); }
+}
+
+.safety-notification-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.875rem;
+  margin-bottom: 0.875rem;
+}
+
+.safety-notification-icon-wrap {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  background: rgba(255, 60, 60, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.safety-notification-icon {
+  font-size: 1.25rem;
+  color: hsl(0 80% 65%);
+}
+
+.safety-notification-info { flex: 1; }
+
+.safety-notification-title {
+  font-family: var(--font-headline, 'Space Grotesk', sans-serif);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-primary, #e8eaf0);
+  margin: 0 0 0.2rem;
+}
+
+.safety-notification-time {
+  font-size: 0.775rem;
+  color: var(--text-muted, #8890a4);
+}
+
+.safety-notification-message {
+  font-size: 0.875rem;
+  color: var(--text-secondary, #b0b8cc);
+  margin: 0 0 1rem;
+  line-height: 1.6;
+}
+
+.safety-notification-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.safety-btn-safe {
+  background: linear-gradient(135deg, hsl(142 70% 35%), hsl(142 70% 28%));
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-md, 0.75rem);
+  padding: 0.625rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  cursor: pointer;
+  transition: filter 0.2s, transform 0.15s;
+}
+
+.safety-btn-safe:hover:not(:disabled) { filter: brightness(1.15); transform: translateY(-1px); }
+
+.safety-btn-danger {
+  background: linear-gradient(135deg, hsl(0 80% 45%), hsl(0 80% 36%));
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-md, 0.75rem);
+  padding: 0.625rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  cursor: pointer;
+  transition: filter 0.2s, transform 0.15s;
+}
+
+.safety-btn-danger:hover:not(:disabled) { filter: brightness(1.15); transform: translateY(-1px); }
+
+.safety-btn-safe:disabled,
+.safety-btn-danger:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
+
+.safety-btn-send {
+  background: linear-gradient(135deg, hsl(220 85% 55%), hsl(220 85% 45%));
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-md, 0.75rem);
+  padding: 0.625rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+  transition: filter 0.2s, transform 0.15s;
+}
+
+.safety-btn-send:hover:not(:disabled) { filter: brightness(1.12); transform: translateY(-1px); }
+.safety-btn-send:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.safety-notification-responded {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-md, 0.75rem);
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.safety-notification-responded--safe {
+  background: rgba(60, 200, 100, 0.1);
+  color: hsl(142 60% 55%);
+  border: 1px solid rgba(60, 200, 100, 0.25);
+}
+
+.safety-notification-responded--danger {
+  background: rgba(255, 60, 60, 0.1);
+  color: hsl(0 80% 65%);
+  border: 1px solid rgba(255, 60, 60, 0.25);
+}
+
+/* stat-card-mini danger modifier */
+.stat-card-mini--danger {
+  border-color: rgba(255, 80, 80, 0.35);
+  background: rgba(255, 60, 60, 0.07);
+}
+
+.stat-card-mini--danger .stat-card-mini-value {
+  color: hsl(0 80% 65%);
+}
+

@@ -205,7 +205,8 @@ function App() {
                 </RoleRoute>
               } />
 
-              {/* Corrections - specific views */}
+              {/* Corrections — index redirects to personal view; sub-routes handle specific roles */}
+              <Route path="corrections" element={<Navigate to="corrections/my" replace />} />
               <Route path="corrections/request" element={<CorrectionFormPage />} />
               <Route path="corrections/my" element={<MyCorrectionsPage />} />
               <Route path="corrections/manager" element={

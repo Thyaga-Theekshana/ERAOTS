@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { emergencyAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import EmergencyNotification from '../components/EmergencyNotification';
+import InDangerEmployeesList from '../components/InDangerEmployeesList';
 
 export default function EmergencyPage() {
   const { user } = useAuth();
@@ -15,6 +17,9 @@ export default function EmergencyPage() {
   const [safetyLoading, setSafetyLoading] = useState(false);
   const [safetyFilter, setSafetyFilter] = useState('ALL');
   const [sendingCheck, setSendingCheck] = useState(false);
+  // Employee self-response state (shown to EMPLOYEE role only)
+  const [selfRespondingLoading, setSelfRespondingLoading] = useState(false);
+  const [selfResponded, setSelfResponded] = useState(false);
 
   useEffect(() => {
     fetchActive();
@@ -136,8 +141,22 @@ export default function EmergencyPage() {
   }
 
   const isAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'HR_MANAGER';
+  const isEmployee = user?.role === 'EMPLOYEE' || user?.role === 'MANAGER';
   const missingCount = activeEmergency?.headcount_entries?.filter(e => !e.accounted_for).length || 0;
   const safeCount = activeEmergency?.headcount_entries?.filter(e => e.accounted_for).length || 0;
+
+  // Employee self-response handler (used by EmergencyNotification)
+  const handleSelfRespond = async (response) => {
+    try {
+      setSelfRespondingLoading(true);
+      await emergencyAPI.respondSafetyCheck(response);
+      setSelfResponded(true);
+    } catch (err) {
+      alert(err.response?.data?.detail || 'Failed to submit your safety response');
+    } finally {
+      setSelfRespondingLoading(false);
+    }
+  };
 
   // Filter safety check responses based on selected filter
   const filteredResponses = safetyCheck?.responses?.filter(r => {
@@ -147,6 +166,15 @@ export default function EmergencyPage() {
 
   return (
     <div className="page-container">
+      {/* Employee Safety Check Modal — shown to non-admin users when emergency is active */}
+      {isEmployee && activeEmergency && activeEmergency.safety_check_sent && !selfResponded && (
+        <EmergencyNotification
+          emergency={activeEmergency}
+          onRespond={handleSelfRespond}
+          loading={selfRespondingLoading}
+        />
+      )}
+
       {/* Page Header */}
       <header className="page-header-premium">
         <div className="page-header-content">
@@ -406,7 +434,7 @@ export default function EmergencyPage() {
             </div>
           )}
 
-          {/* Muster Checklist */}
+          {/* In Danger Employees List — uses the reusable component */}
           <div className="table-card-premium emergency-table">
             <div className="table-card-header">
               <div className="table-card-title-group">
@@ -417,58 +445,22 @@ export default function EmergencyPage() {
                 </div>
               </div>
             </div>
-
-            <div className="table-wrapper">
-              <table className="premium-table">
-                <thead>
-                  <tr>
-                    <th>Employee Name</th>
-                    <th>Status at Event</th>
-                    <th>Safe Time</th>
-                    <th>Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {activeEmergency.headcount_entries?.map(entry => (
-                    <tr
-                      key={entry.id}
-                      className={entry.accounted_for ? 'emergency-row-safe' : 'emergency-row-missing'}
-                    >
-                      <td>
-                        <span className="table-cell-name">{entry.employee_name}</span>
-                      </td>
-                      <td>
-                        <span className="status-chip status-chip--active">{entry.status_at_event}</span>
-                      </td>
-                      <td>
-                        <span className="table-cell-time">
-                          {entry.accounted_at
-                            ? new Date(entry.accounted_at).toLocaleTimeString()
-                            : '—'}
-                        </span>
-                      </td>
-                      <td>
-                        {!entry.accounted_for ? (
-                          <button
-                            className="btn btn-success btn-small"
-                            onClick={() => handleAccountFor(entry.id)}
-                          >
-                            <span className="material-symbols-outlined">check</span>
-                            Mark Safe
-                          </button>
-                        ) : (
-                          <span className="safe-badge">
-                            <span className="material-symbols-outlined">verified</span>
-                            SAFE
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <InDangerEmployeesList
+              employees={(activeEmergency.headcount_entries || []).map(e => ({
+                headcount_id: e.id,
+                employee_id: e.employee_id,
+                name: e.employee_name,
+                department: e.department_name,
+                status_at_event: e.status_at_event,
+                accounted_for: e.accounted_for,
+                last_known_door: e.last_known_door,
+                accounted_at: e.accounted_at,
+              }))}
+              onMarkAccounted={handleAccountFor}
+              loading={false}
+            />
           </div>
+
         </div>
       )}
     </div>
