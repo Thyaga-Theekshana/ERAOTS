@@ -8,8 +8,8 @@
  * - No explicit border/divider lines — separation via tonal layers only
  *
  * Navigation Architecture:
- *  SUPER_ADMIN → Sparse maintenance nav (6 items, no portal toggle)
- *  HR_MANAGER  → Managerial (11 items) ↔ Personal (6 items) toggle
+ *  SUPER_ADMIN → System nav + personal schedule (no portal toggle)
+ *  HR_MANAGER  → Managerial + personal schedule ↔ Personal portal toggle
  *  MANAGER     → Team management (6 items) ↔ Personal (6 items) toggle
  *  EMPLOYEE    → Personal pages only (6 items, no toggle)
  */
@@ -23,6 +23,7 @@ import { employeeAPI, departmentAPI } from '../services/api';
 
 const NAV_SUPER_ADMIN = [
   { to: '/',                label: 'Live Overview',   icon: 'pulse_alert' },
+  { to: '/my-schedule',     label: 'My Schedule',     icon: 'calendar_month' },
   { to: '/scanners',        label: 'Scanners',        icon: 'sensors' },
   { to: '/hardware',        label: 'Hardware Health', icon: 'monitor_heart' },
   { to: '/system-insights', label: 'System Insights', icon: 'shield_with_heart' },
@@ -33,6 +34,7 @@ const NAV_SUPER_ADMIN = [
 
 const NAV_HR_MANAGERIAL = [
   { to: '/',              label: 'Dashboard',       icon: 'grid_view' },
+  { to: '/my-schedule',   label: 'My Schedule',     icon: 'calendar_month' },
   { to: '/employees',     label: 'Directory',       icon: 'groups' },
   { to: '/departments',   label: 'Departments',     icon: 'corporate_fare' },
   { to: '/attendance',    label: 'Attendance',      icon: 'event_available' },

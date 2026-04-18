@@ -10,8 +10,8 @@ import { useTheme } from '../context/ThemeContext';
 
 // Test accounts — 4 roles, aligned with the RBAC hierarchy
 const DEMO_ACCOUNTS = [
-  { label: 'Super Admin',  role: 'SUPER_ADMIN', email: 'superadmin@eraots.com', password: 'super123' },
-  { label: 'HR Manager',  role: 'HR_MANAGER',  email: 'hr@eraots.com',         password: 'hr1234'   },
+  { label: 'Super Admin',  role: 'SUPER_ADMIN', email: 'superadmin@eraots.com', password: 'sup123' },
+  { label: 'HR Manager',  role: 'HR_MANAGER',  email: 'hr@eraots.com',         password: 'hr123'    },
   { label: 'Dept Manager',role: 'MANAGER',     email: 'manager@eraots.com',    password: 'mgr123'   },
   { label: 'Employee',    role: 'EMPLOYEE',    email: 'employee@eraots.com',   password: 'emp123'   },
 ];
