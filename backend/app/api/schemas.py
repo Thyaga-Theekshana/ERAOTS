@@ -689,6 +689,7 @@ class MonthlyTrendEntry(BaseModel):
     present_days: int = 0
     late_days: int = 0
     absent_days: int = 0
+    total_hours_worked: float = 0.0
     avg_hours: float = 0.0
     avg_punctuality: int = 0
     total_overtime_min: int = 0

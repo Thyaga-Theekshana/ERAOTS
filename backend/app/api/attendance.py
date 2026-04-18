@@ -14,6 +14,10 @@ from app.models.employee import UserAccount, Department, Employee
 from app.models.attendance import AttendanceRecord
 from app.models.events import OccupancyState, ScanEvent
 from app.core.attendance_processor import process_daily_attendance
+from app.core.attendance_schedule import (
+    get_employee_schedule_for_date,
+    compute_schedule_comparison,
+)
 from app.api.schemas import (
     PersonalInsightsResponse, PunctualityScoreResponse, DeskVsBuildingEntry,
     LateRiskPrediction, ArrivalTrendEntry, MonthlyTrendEntry,
@@ -111,9 +115,19 @@ async def get_attendance_records(
 
     results = (await db.execute(stmt)).scalars().all()
 
-    # Map to dicts for simpler JSON serialization (avoiding pydantic models here for speed)
-    return [
-        {
+    schedule_cache: dict[tuple[str, str], dict] = {}
+    payload = []
+    for r in results:
+        cache_key = (str(r.employee_id), r.attendance_date.isoformat())
+        if cache_key not in schedule_cache:
+            schedule = await get_employee_schedule_for_date(db, r.employee_id, r.attendance_date)
+            schedule_cache[cache_key] = compute_schedule_comparison(
+                r.attendance_date,
+                schedule,
+                r.total_productive_time_min or 0,
+            )
+
+        payload.append({
             "record_id": str(r.record_id),
             "employee_name": f"{r.employee.first_name} {r.employee.last_name}",
             "employee_id": str(r.employee_id),
@@ -129,10 +143,10 @@ async def get_attendance_records(
             "is_late": r.is_late,
             "late_duration_min": r.late_duration_min,
             "status": r.status,
-            "overtime_duration_min": r.overtime_duration_min
-        }
-        for r in results
-    ]
+            "overtime_duration_min": r.overtime_duration_min,
+            **schedule_cache[cache_key],
+        })
+    return payload
 
 
 # ==================== PERSONAL INSIGHTS (FR10, FR12) ====================
@@ -372,6 +386,7 @@ def _compute_monthly_trends(records: list) -> List[MonthlyTrendEntry]:
             present_days=data["present"],
             late_days=data["late"],
             absent_days=data["absent"],
+            total_hours_worked=round(sum(data["hours"]), 1),
             avg_hours=round(avg_hrs, 1),
             avg_punctuality=avg_punct,
             total_overtime_min=data["overtime"]

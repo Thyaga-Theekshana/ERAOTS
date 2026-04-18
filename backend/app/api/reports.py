@@ -25,6 +25,10 @@ import uuid
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user, require_roles
+from app.core.attendance_schedule import (
+    get_employee_schedule_for_date,
+    compute_schedule_comparison,
+)
 from app.models.employee import UserAccount, Employee, Department
 from app.models.attendance import AttendanceRecord
 
@@ -223,6 +227,7 @@ async def export_attendance_report(
     end_date: str = Query(..., description="End date (YYYY-MM-DD)"),
     format: str = Query("excel", description="Export format: csv, excel, pdf"),
     department_id: Optional[uuid.UUID] = None,
+    employee_id: Optional[uuid.UUID] = None,
     db: AsyncSession = Depends(get_db),
     current_user: UserAccount = Depends(get_current_user)
 ):
@@ -256,6 +261,8 @@ async def export_attendance_report(
     
     if department_id:
         stmt = stmt.join(Employee).where(Employee.department_id == department_id)
+    if employee_id:
+        stmt = stmt.where(AttendanceRecord.employee_id == employee_id)
     
     result = await db.execute(stmt)
     records = result.scalars().all()
@@ -263,22 +270,43 @@ async def export_attendance_report(
     # Prepare data
     headers = [
         "Date", "Employee Name", "Department", "First Entry", "Last Exit",
-        "Active Time (min)", "Late", "Late Duration (min)", "Overtime (min)", "Status"
+        "Time in Building (min)", "Active Time (min)", "Break Count", "Break Duration (min)",
+        "Late", "Late Duration (min)", "Overtime (min)",
+        "Scheduled Start", "Scheduled End", "Scheduled Minutes", "Variance vs Schedule (min)",
+        "Status"
     ]
     
+    schedule_cache: dict[tuple[str, str], dict] = {}
     rows = []
     for r in records:
         dept_name = r.employee.department.name if r.employee.department else "N/A"
+        cache_key = (str(r.employee_id), r.attendance_date.isoformat())
+        if cache_key not in schedule_cache:
+            schedule = await get_employee_schedule_for_date(db, r.employee_id, r.attendance_date)
+            schedule_cache[cache_key] = compute_schedule_comparison(
+                r.attendance_date,
+                schedule,
+                r.total_productive_time_min or 0,
+            )
+        comparison = schedule_cache[cache_key]
+
         rows.append([
             r.attendance_date.isoformat(),
             f"{r.employee.first_name} {r.employee.last_name}",
             dept_name,
             r.first_entry.strftime("%H:%M") if r.first_entry else "—",
             r.last_exit.strftime("%H:%M") if r.last_exit else "—",
+            r.total_time_in_building_min or 0,
             r.total_active_time_min or 0,
+            r.break_count or 0,
+            r.total_break_duration_min or 0,
             "Yes" if r.is_late else "No",
             r.late_duration_min or 0,
             r.overtime_duration_min or 0,
+            comparison["scheduled_start"] or "—",
+            comparison["scheduled_end"] or "—",
+            comparison["scheduled_minutes"] if comparison["scheduled_minutes"] is not None else "—",
+            comparison["actual_vs_scheduled_variance_min"] if comparison["actual_vs_scheduled_variance_min"] is not None else "—",
             r.status or "—"
         ])
     

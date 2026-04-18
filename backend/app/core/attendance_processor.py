@@ -20,6 +20,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.events import ScanEvent, OccupancyState, PendingStateTransition, StatusLog
 from app.models.employee import Employee
 from app.models.attendance import AttendanceRecord
+from app.models.policies import Policy
+from app.core.config import settings
+from app.core.attendance_schedule import get_employee_schedule_for_date, get_schedule_window
 import uuid
 import logging
 
@@ -157,12 +160,27 @@ async def process_daily_attendance(db: AsyncSession, target_date: date, employee
         total_meeting_minutes = 0
         total_break_minutes = 0
         break_count = 0
+        overtime_min = 0
+
+        # Resolve schedule for FR4.2 / FR4.3 / FR4.8
+        schedule = await get_employee_schedule_for_date(db, emp.employee_id, target_date)
+        scheduled_start = None
+        scheduled_end = None
+        schedule_grace_minutes = settings.GRACE_PERIOD_MINUTES
+        if schedule:
+            scheduled_start, scheduled_end, _, schedule_grace_minutes = get_schedule_window(
+                target_date, schedule
+            )
         
         if len(transitions) > 1:
             for i in range(len(transitions) - 1):
                 current = transitions[i]
                 next_t = transitions[i + 1]
                 delta_minutes = int((next_t.timestamp - current.timestamp).total_seconds() / 60)
+
+                segment_start = current.timestamp
+                segment_end = next_t.timestamp
+                productive_segment = current.status in ("ACTIVE", "IN_MEETING")
 
                 if current.status == "ACTIVE":
                     total_active_minutes += delta_minutes
@@ -172,18 +190,32 @@ async def process_daily_attendance(db: AsyncSession, target_date: date, employee
                     total_break_minutes += delta_minutes
                     break_count += 1
 
+                if productive_segment and scheduled_end:
+                    overlap_start = max(segment_start, scheduled_end)
+                    overlap_end = segment_end
+                    if overlap_end > overlap_start:
+                        overtime_min += int((overlap_end - overlap_start).total_seconds() / 60)
+
             # Handle the final segment (employee still inside at time of processing)
             last_transition = transitions[-1]
             if last_transition.status != "OUTSIDE":
                 now = datetime.now(timezone.utc)
                 if now < end_of_day:
                     trailing = int((now - last_transition.timestamp).total_seconds() / 60)
+                    segment_start = last_transition.timestamp
+                    segment_end = now
                     if last_transition.status == "IN_MEETING":
                         total_meeting_minutes += trailing
                     elif last_transition.status in ("ON_BREAK", "AWAY"):
                         total_break_minutes += trailing
                     elif last_transition.status == "ACTIVE":
                         total_active_minutes += trailing
+
+                    if last_transition.status in ("ACTIVE", "IN_MEETING") and scheduled_end:
+                        overlap_start = max(segment_start, scheduled_end)
+                        overlap_end = segment_end
+                        if overlap_end > overlap_start:
+                            overtime_min += int((overlap_end - overlap_start).total_seconds() / 60)
 
         elif len(transitions) == 1:
             # Only one transition (entry, never left) — count time until now or end-of-day
@@ -196,6 +228,11 @@ async def process_daily_attendance(db: AsyncSession, target_date: date, employee
                     total_active_minutes += delta_minutes
                 elif single.status == "IN_MEETING":
                     total_meeting_minutes += delta_minutes
+                if single.status in ("ACTIVE", "IN_MEETING") and scheduled_end and cap > scheduled_end:
+                    overlap_start = max(single.timestamp, scheduled_end)
+                    overlap_end = cap
+                    if overlap_end > overlap_start:
+                        overtime_min += int((overlap_end - overlap_start).total_seconds() / 60)
 
         else:
             # No status log entries and no fallback transitions: use raw IN/OUT
@@ -219,13 +256,25 @@ async def process_daily_attendance(db: AsyncSession, target_date: date, employee
         # Calculate total productive time (At Desk + In Meeting)
         total_productive_minutes = total_active_minutes + total_meeting_minutes
 
-        # Extract configurations from DB Policies
-        from app.models.policies import Policy
-        start_time_policy = (await db.execute(select(Policy).where(and_(Policy.policy_type == "START_TIME", Policy.is_active == True)))).scalars().first()
-        office_start_hour = int(start_time_policy.value.get("hour", 9)) if start_time_policy else 9
-        office_start_min = int(start_time_policy.value.get("minute", 0)) if start_time_policy else 0
-        
-        expected_arrival = datetime.combine(target_date, datetime.min.time().replace(hour=office_start_hour, minute=office_start_min), tzinfo=timezone.utc)
+        # Late flag is based on assigned schedule + grace when available (FR4.2),
+        # otherwise fallback to START_TIME policy.
+        if scheduled_start:
+            expected_arrival = scheduled_start + timedelta(minutes=schedule_grace_minutes)
+        else:
+            start_time_policy = (
+                await db.execute(
+                    select(Policy).where(
+                        and_(Policy.policy_type == "START_TIME", Policy.is_active == True)
+                    )
+                )
+            ).scalars().first()
+            office_start_hour = int(start_time_policy.value.get("hour", 9)) if start_time_policy else 9
+            office_start_min = int(start_time_policy.value.get("minute", 0)) if start_time_policy else 0
+            expected_arrival = datetime.combine(
+                target_date,
+                datetime.min.time().replace(hour=office_start_hour, minute=office_start_min),
+                tzinfo=timezone.utc,
+            ) + timedelta(minutes=settings.GRACE_PERIOD_MINUTES)
         
         is_late = False
         late_duration_min = 0
@@ -235,10 +284,18 @@ async def process_daily_attendance(db: AsyncSession, target_date: date, employee
             is_late = True
             late_duration_min = int((cmp_first_entry - expected_arrival).total_seconds() / 60)
             
-        ot_policy = (await db.execute(select(Policy).where(and_(Policy.policy_type == "OVERTIME_THRESHOLD", Policy.is_active == True)))).scalars().first()
-        threshold_min = int(ot_policy.value.get("threshold_min", 480)) if ot_policy else 480
-
-        overtime_min = max(0, total_productive_minutes - threshold_min)
+        # Overtime is productive time beyond scheduled shift end (FR4.3).
+        # Fallback to threshold policy only when no schedule is assigned.
+        if not scheduled_end:
+            ot_policy = (
+                await db.execute(
+                    select(Policy).where(
+                        and_(Policy.policy_type == "OVERTIME_THRESHOLD", Policy.is_active == True)
+                    )
+                )
+            ).scalars().first()
+            threshold_min = int(ot_policy.value.get("threshold_min", 480)) if ot_policy else 480
+            overtime_min = max(0, total_productive_minutes - threshold_min)
 
         # 5. Upsert Attendance Record
         record_stmt = select(AttendanceRecord).where(

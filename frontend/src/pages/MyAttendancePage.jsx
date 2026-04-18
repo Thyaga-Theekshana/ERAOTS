@@ -47,10 +47,10 @@ export default function MyAttendancePage() {
       
       // Calculate stats
       setStats({
-        present: data.filter(r => r.status === 'PRESENT').length,
-        late: data.filter(r => r.status === 'LATE').length,
+        present: data.filter(r => r.status === 'PRESENT' || r.status === 'HALF_DAY').length,
+        late: data.filter(r => r.is_late).length,
         absent: data.filter(r => r.status === 'ABSENT').length,
-        totalHours: data.reduce((sum, r) => sum + (r.hours_worked || 0), 0).toFixed(1),
+        totalHours: data.reduce((sum, r) => sum + ((r.total_time_in_building_min || 0) / 60), 0).toFixed(1),
       });
     } catch (err) {
       console.error('Failed to fetch attendance:', err);
@@ -207,19 +207,26 @@ export default function MyAttendancePage() {
               {records.map((record) => (
                 <tr key={record.record_id}>
                   <td>{formatDate(record.date)}</td>
-                  <td>{formatTime(record.check_in_time)}</td>
-                  <td>{formatTime(record.check_out_time)}</td>
-                  <td>{record.hours_worked ? `${record.hours_worked.toFixed(1)}h` : '—'}</td>
+                  <td>{formatTime(record.first_entry)}</td>
+                  <td>{formatTime(record.last_exit)}</td>
+                  <td>{record.total_time_in_building_min ? `${(record.total_time_in_building_min / 60).toFixed(1)}h` : '—'}</td>
                   <td>
+                    {(() => {
+                      const displayStatus = record.status === 'ABSENT'
+                        ? 'ABSENT'
+                        : (record.is_late ? 'LATE' : 'PRESENT');
+                      return (
                     <span 
                       className="status-badge"
                       style={{ 
-                        background: `${getStatusColor(record.status)}20`,
-                        color: getStatusColor(record.status),
+                        background: `${getStatusColor(displayStatus)}20`,
+                        color: getStatusColor(displayStatus),
                       }}
                     >
-                      {record.status}
+                      {displayStatus}
                     </span>
+                      );
+                    })()}
                   </td>
                 </tr>
               ))}

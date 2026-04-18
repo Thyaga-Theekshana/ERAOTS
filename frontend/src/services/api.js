@@ -276,15 +276,18 @@ export const reportsAPI = {
    * @param {string} endDate - End date (YYYY-MM-DD)
    * @param {string} format - Export format: csv, excel, pdf
    * @param {string} departmentId - Optional department filter
+   * @param {string} employeeId - Optional individual employee filter
    */
   exportAttendance: (
     startDate,
     endDate,
     format = "excel",
     departmentId = null,
+    employeeId = null,
   ) => {
     const params = { start_date: startDate, end_date: endDate, format };
     if (departmentId) params.department_id = departmentId;
+    if (employeeId) params.employee_id = employeeId;
     return api.get("/api/reports/attendance", { params, responseType: "blob" });
   },
 
