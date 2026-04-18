@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { attendanceAPI, eventsAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { useUIFeedback } from '../context/UIFeedbackContext';
+import { TableSkeleton, EmptyStateStandard, ErrorStateStandard } from '../components/DataStates';
 
 /**
  * Time-breakdown bar for a single attendance record.
@@ -70,8 +72,27 @@ function toHours(minutes) {
   return hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
 }
 
+const isPlainObject = (value) => value && typeof value === 'object' && !Array.isArray(value);
+
+const normalizeTimeline = (payload) => {
+  if (!isPlainObject(payload)) {
+    return null;
+  }
+
+  return {
+    ...payload,
+    total_building_min: Number.isFinite(Number(payload.total_building_min)) ? Number(payload.total_building_min) : 0,
+    total_active_min: Number.isFinite(Number(payload.total_active_min)) ? Number(payload.total_active_min) : 0,
+    total_meeting_min: Number.isFinite(Number(payload.total_meeting_min)) ? Number(payload.total_meeting_min) : 0,
+    total_break_min: Number.isFinite(Number(payload.total_break_min)) ? Number(payload.total_break_min) : 0,
+    total_productive_min: Number.isFinite(Number(payload.total_productive_min)) ? Number(payload.total_productive_min) : 0,
+    segments: Array.isArray(payload.segments) ? payload.segments : [],
+  };
+};
+
 export default function AttendancePage({ departmentScoped = false }) {
   const { user } = useAuth();
+  const ui = useUIFeedback();
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(false);
   const [targetDate, setTargetDate] = useState(new Date().toISOString().split('T')[0]);
@@ -94,10 +115,13 @@ export default function AttendancePage({ departmentScoped = false }) {
       }
       
       const res = await attendanceAPI.list(params);
-      setRecords(res.data);
+      setRecords(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.error("Failed to fetch records", err);
-      setError("Failed to fetch attendance data.");
+      const detail = err.response?.data?.detail || 'Failed to fetch attendance data.';
+      setError(detail);
+      ui.error(detail);
+      setRecords([]);
     } finally {
       setLoading(false);
     }
@@ -119,6 +143,7 @@ export default function AttendancePage({ departmentScoped = false }) {
       fetchRecords();
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to process attendance');
+      ui.error(err.response?.data?.detail || 'Failed to process attendance');
       setLoading(false);
     }
   };
@@ -134,9 +159,10 @@ export default function AttendancePage({ departmentScoped = false }) {
     setTimelineLoading(true);
     try {
       const res = await eventsAPI.statusTimeline(rec.employee_id, targetDate);
-      setTimeline(res.data);
+      setTimeline(normalizeTimeline(res.data));
     } catch (err) {
       console.error('Failed to fetch timeline', err);
+      ui.warning('Failed to load status timeline for selected record');
       setTimeline(null);
     } finally {
       setTimelineLoading(false);
@@ -261,15 +287,7 @@ export default function AttendancePage({ departmentScoped = false }) {
       </div>
 
       {/* Alerts */}
-      {error && (
-        <div className="alert alert--error">
-          <span className="material-symbols-outlined">error</span>
-          {error}
-          <button className="alert-dismiss" onClick={() => setError('')}>
-            <span className="material-symbols-outlined">close</span>
-          </button>
-        </div>
-      )}
+      {error && <ErrorStateStandard message={error} onRetry={fetchRecords} />}
       {success && (
         <div className="alert alert--success">
           <span className="material-symbols-outlined">check_circle</span>
@@ -293,10 +311,13 @@ export default function AttendancePage({ departmentScoped = false }) {
         </div>
 
         {loading ? (
-          <div className="table-loading">
-            <div className="loading-spinner"></div>
-            <span>Loading attendance records...</span>
-          </div>
+          <TableSkeleton rows={8} columns={8} label="Loading attendance records..." />
+        ) : records.length === 0 ? (
+          <EmptyStateStandard
+            icon="event_busy"
+            title="No attendance records"
+            message="Run Process EOD to compute attendance from scan events."
+          />
         ) : (
           <div className="table-wrapper">
             <table className="premium-table">
@@ -313,152 +334,142 @@ export default function AttendancePage({ departmentScoped = false }) {
                 </tr>
               </thead>
               <tbody>
-                {records.length === 0 ? (
-                  <tr>
-                    <td colSpan="8" className="table-empty">
-                      <span className="material-symbols-outlined">event_busy</span>
-                      <p>No attendance records for this date</p>
-                      <span className="table-empty-hint">Run "Process EOD" to compute records from scan events</span>
-                    </td>
-                  </tr>
-                ) : (
-                  records.map(rec => (
-                    <>
-                      <tr
-                        key={rec.record_id}
-                        onClick={() => handleRowClick(rec)}
-                        style={{
-                          cursor: 'pointer',
-                          background: selectedRecord?.record_id === rec.record_id
-                            ? 'var(--color-surface-elevated, rgba(255,255,255,0.05))'
-                            : undefined,
-                        }}
-                      >
-                        <td>
-                          <span className="table-cell-name">{rec.employee_name}</span>
-                        </td>
-                        <td>
-                          <span className="table-cell-time">{formatTime(rec.first_entry)}</span>
-                        </td>
-                        <td>
-                          <span className="table-cell-time">{formatTime(rec.last_exit)}</span>
-                        </td>
-                        <td>
-                          <span className="table-cell-metric">
-                            {toHours(rec.total_time_in_building_min || 0)}
+                {records.map(rec => (
+                  <>
+                    <tr
+                      key={rec.record_id}
+                      onClick={() => handleRowClick(rec)}
+                      style={{
+                        cursor: 'pointer',
+                        background: selectedRecord?.record_id === rec.record_id
+                          ? 'var(--color-surface-elevated, rgba(255,255,255,0.05))'
+                          : undefined,
+                      }}
+                    >
+                      <td>
+                        <span className="table-cell-name">{rec.employee_name}</span>
+                      </td>
+                      <td>
+                        <span className="table-cell-time">{formatTime(rec.first_entry)}</span>
+                      </td>
+                      <td>
+                        <span className="table-cell-time">{formatTime(rec.last_exit)}</span>
+                      </td>
+                      <td>
+                        <span className="table-cell-metric">
+                          {toHours(rec.total_time_in_building_min || 0)}
+                        </span>
+                      </td>
+                      <td style={{ minWidth: '160px' }}>
+                        <TimeBreakdownBar record={rec} />
+                      </td>
+                      <td>
+                        <span className="table-cell-metric" style={{ color: '#22c55e' }}>
+                          {toHours(rec.total_productive_time_min ?? rec.total_active_time_min ?? 0)}
+                        </span>
+                      </td>
+                      <td>
+                        {rec.is_late ? (
+                          <span className="punctuality-chip punctuality-chip--late">
+                            +{rec.late_duration_min}m late
                           </span>
-                        </td>
-                        <td style={{ minWidth: '160px' }}>
-                          <TimeBreakdownBar record={rec} />
-                        </td>
-                        <td>
-                          <span className="table-cell-metric" style={{ color: '#22c55e' }}>
-                            {toHours(rec.total_productive_time_min ?? rec.total_active_time_min ?? 0)}
+                        ) : (
+                          <span className="punctuality-chip punctuality-chip--ontime">
+                            On Time
                           </span>
-                        </td>
-                        <td>
-                          {rec.is_late ? (
-                            <span className="punctuality-chip punctuality-chip--late">
-                              +{rec.late_duration_min}m late
-                            </span>
+                        )}
+                      </td>
+                      <td>
+                        <span className="status-chip status-chip--active">{rec.status}</span>
+                      </td>
+                    </tr>
+
+                    {/* Expanded timeline row */}
+                    {selectedRecord?.record_id === rec.record_id && (
+                      <tr key={`${rec.record_id}-timeline`}>
+                        <td colSpan="8" style={{ padding: '0 16px 16px', background: 'var(--color-surface-elevated, rgba(255,255,255,0.03))' }}>
+                          {timelineLoading ? (
+                            <div style={{ padding: '12px 0', color: 'var(--color-text-muted)', fontSize: '13px' }}>
+                              Loading status timeline…
+                            </div>
+                          ) : timeline ? (
+                            <div style={{ paddingTop: '12px' }}>
+                              <div style={{ display: 'flex', gap: '24px', marginBottom: '12px', flexWrap: 'wrap' }}>
+                                <div>
+                                  <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>IN BUILDING</span>
+                                  <div style={{ fontSize: '20px', fontWeight: 700 }}>{toHours(timeline.total_building_min)}</div>
+                                </div>
+                                <div>
+                                  <span style={{ fontSize: '11px', color: '#22c55e' }}>ACTIVE (DESK)</span>
+                                  <div style={{ fontSize: '20px', fontWeight: 700, color: '#22c55e' }}>{toHours(timeline.total_active_min)}</div>
+                                </div>
+                                <div>
+                                  <span style={{ fontSize: '11px', color: '#3b82f6' }}>IN MEETINGS</span>
+                                  <div style={{ fontSize: '20px', fontWeight: 700, color: '#3b82f6' }}>{toHours(timeline.total_meeting_min)}</div>
+                                </div>
+                                <div>
+                                  <span style={{ fontSize: '11px', color: '#f59e0b' }}>ON BREAK</span>
+                                  <div style={{ fontSize: '20px', fontWeight: 700, color: '#f59e0b' }}>{toHours(timeline.total_break_min)}</div>
+                                </div>
+                                <div>
+                                  <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>PRODUCTIVE</span>
+                                  <div style={{ fontSize: '20px', fontWeight: 700 }}>{toHours(timeline.total_productive_min)}</div>
+                                </div>
+                              </div>
+
+                              {/* Timeline segments */}
+                              {timeline.segments.length > 0 ? (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                  {timeline.segments.map((seg, idx) => (
+                                    <div
+                                      key={idx}
+                                      style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '12px',
+                                        padding: '6px 10px',
+                                        borderRadius: '6px',
+                                        background: 'var(--color-surface, rgba(255,255,255,0.02))',
+                                        fontSize: '12px',
+                                      }}
+                                    >
+                                      <span style={{
+                                        width: '10px',
+                                        height: '10px',
+                                        borderRadius: '50%',
+                                        background: STATUS_COLORS[seg.status] || '#6b7280',
+                                        flexShrink: 0,
+                                      }} />
+                                      <span style={{ width: '90px', color: STATUS_COLORS[seg.status] || '#6b7280', fontWeight: 600 }}>
+                                        {seg.status.replace('_', ' ')}
+                                      </span>
+                                      <span style={{ color: 'var(--color-text-muted)', width: '120px' }}>
+                                        {formatTime(seg.from)} → {formatTime(seg.to)}
+                                      </span>
+                                      <span style={{ fontWeight: 500 }}>{toHours(seg.duration_min)}</span>
+                                      <span style={{ color: 'var(--color-text-muted)', fontSize: '10px', marginLeft: 'auto' }}>
+                                        via {seg.source}
+                                        {seg.is_ongoing ? ' · ongoing' : ''}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p style={{ color: 'var(--color-text-muted)', fontSize: '13px', margin: 0 }}>
+                                  No detailed status log for this day. Run "Process EOD" to recompute.
+                                </p>
+                              )}
+                            </div>
                           ) : (
-                            <span className="punctuality-chip punctuality-chip--ontime">
-                              On Time
-                            </span>
+                            <p style={{ color: 'var(--color-text-muted)', fontSize: '13px', padding: '12px 0', margin: 0 }}>
+                              No timeline data available.
+                            </p>
                           )}
                         </td>
-                        <td>
-                          <span className="status-chip status-chip--active">{rec.status}</span>
-                        </td>
                       </tr>
-
-                      {/* Expanded timeline row */}
-                      {selectedRecord?.record_id === rec.record_id && (
-                        <tr key={`${rec.record_id}-timeline`}>
-                          <td colSpan="8" style={{ padding: '0 16px 16px', background: 'var(--color-surface-elevated, rgba(255,255,255,0.03))' }}>
-                            {timelineLoading ? (
-                              <div style={{ padding: '12px 0', color: 'var(--color-text-muted)', fontSize: '13px' }}>
-                                Loading status timeline…
-                              </div>
-                            ) : timeline ? (
-                              <div style={{ paddingTop: '12px' }}>
-                                <div style={{ display: 'flex', gap: '24px', marginBottom: '12px', flexWrap: 'wrap' }}>
-                                  <div>
-                                    <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>IN BUILDING</span>
-                                    <div style={{ fontSize: '20px', fontWeight: 700 }}>{toHours(timeline.total_building_min)}</div>
-                                  </div>
-                                  <div>
-                                    <span style={{ fontSize: '11px', color: '#22c55e' }}>ACTIVE (DESK)</span>
-                                    <div style={{ fontSize: '20px', fontWeight: 700, color: '#22c55e' }}>{toHours(timeline.total_active_min)}</div>
-                                  </div>
-                                  <div>
-                                    <span style={{ fontSize: '11px', color: '#3b82f6' }}>IN MEETINGS</span>
-                                    <div style={{ fontSize: '20px', fontWeight: 700, color: '#3b82f6' }}>{toHours(timeline.total_meeting_min)}</div>
-                                  </div>
-                                  <div>
-                                    <span style={{ fontSize: '11px', color: '#f59e0b' }}>ON BREAK</span>
-                                    <div style={{ fontSize: '20px', fontWeight: 700, color: '#f59e0b' }}>{toHours(timeline.total_break_min)}</div>
-                                  </div>
-                                  <div>
-                                    <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>PRODUCTIVE</span>
-                                    <div style={{ fontSize: '20px', fontWeight: 700 }}>{toHours(timeline.total_productive_min)}</div>
-                                  </div>
-                                </div>
-
-                                {/* Timeline segments */}
-                                {timeline.segments.length > 0 ? (
-                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                    {timeline.segments.map((seg, idx) => (
-                                      <div
-                                        key={idx}
-                                        style={{
-                                          display: 'flex',
-                                          alignItems: 'center',
-                                          gap: '12px',
-                                          padding: '6px 10px',
-                                          borderRadius: '6px',
-                                          background: 'var(--color-surface, rgba(255,255,255,0.02))',
-                                          fontSize: '12px',
-                                        }}
-                                      >
-                                        <span style={{
-                                          width: '10px',
-                                          height: '10px',
-                                          borderRadius: '50%',
-                                          background: STATUS_COLORS[seg.status] || '#6b7280',
-                                          flexShrink: 0,
-                                        }} />
-                                        <span style={{ width: '90px', color: STATUS_COLORS[seg.status] || '#6b7280', fontWeight: 600 }}>
-                                          {seg.status.replace('_', ' ')}
-                                        </span>
-                                        <span style={{ color: 'var(--color-text-muted)', width: '120px' }}>
-                                          {formatTime(seg.from)} → {formatTime(seg.to)}
-                                        </span>
-                                        <span style={{ fontWeight: 500 }}>{toHours(seg.duration_min)}</span>
-                                        <span style={{ color: 'var(--color-text-muted)', fontSize: '10px', marginLeft: 'auto' }}>
-                                          via {seg.source}
-                                          {seg.is_ongoing ? ' · ongoing' : ''}
-                                        </span>
-                                      </div>
-                                    ))}
-                                  </div>
-                                ) : (
-                                  <p style={{ color: 'var(--color-text-muted)', fontSize: '13px', margin: 0 }}>
-                                    No detailed status log for this day. Run "Process EOD" to recompute.
-                                  </p>
-                                )}
-                              </div>
-                            ) : (
-                              <p style={{ color: 'var(--color-text-muted)', fontSize: '13px', padding: '12px 0', margin: 0 }}>
-                                No timeline data available.
-                              </p>
-                            )}
-                          </td>
-                        </tr>
-                      )}
-                    </>
-                  ))
-                )}
+                    )}
+                  </>
+                ))}
               </tbody>
             </table>
           </div>

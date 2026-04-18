@@ -2,9 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { meetingsAPI, employeeAPI, departmentAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { useUIFeedback } from '../context/UIFeedbackContext';
+import { TableSkeleton, EmptyStateStandard, ErrorStateStandard } from '../components/DataStates';
 
 export default function MeetingAlerts() {
   const { isSuperAdmin, isAdmin } = useAuth();
+  const ui = useUIFeedback();
   const navigate = useNavigate();
 
   const [loading, setLoading] = useState(true);
@@ -19,6 +22,7 @@ export default function MeetingAlerts() {
   const [departments, setDepartments] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [submitting, setSubmitting] = useState(false);
+  const [pageError, setPageError] = useState('');
 
   useEffect(() => {
     if (!isSuperAdmin && !isAdmin) {
@@ -31,10 +35,15 @@ export default function MeetingAlerts() {
 
   const fetchItems = async () => {
     try {
+      setPageError('');
       const res = await meetingsAPI.list();
       setMeetings(res.data || []);
     } catch (err) {
       console.error(err);
+      const detail = err.response?.data?.detail || 'Failed to load meeting alerts.';
+      setPageError(detail);
+      ui.error(detail);
+      setMeetings([]);
     } finally {
       setLoading(false);
     }
@@ -65,7 +74,7 @@ export default function MeetingAlerts() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.title || !formData.scheduled_at) {
-      alert("Title and Time are required.");
+      ui.warning('Title and Time are required.');
       return;
     }
     setSubmitting(true);
@@ -81,9 +90,10 @@ export default function MeetingAlerts() {
         reminder_minutes: [], target_type: 'ALL', target_ids: []
       });
       fetchItems();
+      ui.success('Meeting alert created successfully.');
     } catch (err) {
       console.error(err);
-      alert("Failed to create meeting alert.");
+      ui.error('Failed to create meeting alert.');
     } finally {
       setSubmitting(false);
     }
@@ -115,8 +125,16 @@ export default function MeetingAlerts() {
         </button>
       </div>
 
+      {pageError && <ErrorStateStandard message={pageError} onRetry={fetchItems} />}
+
       {loading ? (
-        <div className="skeleton" style={{ height: '300px' }}></div>
+        <TableSkeleton rows={6} columns={6} label="Loading meeting alerts..." />
+      ) : meetings.length === 0 ? (
+        <EmptyStateStandard
+          icon="event"
+          title="No meeting alerts"
+          message="Create a meeting alert to notify participants."
+        />
       ) : (
         <div className="glass-card" style={{ overflow: 'hidden' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
@@ -131,9 +149,7 @@ export default function MeetingAlerts() {
               </tr>
             </thead>
             <tbody>
-              {meetings.length === 0 ? (
-                <tr><td colSpan="6" style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)' }}>No meeting alerts found.</td></tr>
-              ) : meetings.map(m => (
+              {meetings.map(m => (
                 <tr key={m.meeting_alert_id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                   <td style={{ padding: '16px', fontWeight: 500 }}>{m.title}</td>
                   <td style={{ padding: '16px' }}>{new Date(m.scheduled_at).toLocaleString()}</td>

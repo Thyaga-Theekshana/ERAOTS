@@ -1,20 +1,28 @@
 import { useState, useEffect } from 'react';
 import { notificationsAPI, emergencyAPI } from '../services/api';
+import { useUIFeedback } from '../context/UIFeedbackContext';
+import { TableSkeleton, EmptyStateStandard, ErrorStateStandard } from '../components/DataStates';
 
 export default function NotificationsPage() {
+  const ui = useUIFeedback();
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [pageError, setPageError] = useState('');
   const [respondingId, setRespondingId] = useState(null);
   const [respondedIds, setRespondedIds] = useState({});
 
   const fetchData = async () => {
     try {
       setLoading(true);
+      setPageError('');
       const res = await notificationsAPI.list({ limit: 50 });
       // notifications_v2 returns { total, items } shape
       setNotifications(res.data?.items || res.data || []);
     } catch (err) {
       console.error("Failed to fetch notifications", err);
+      const detail = err.response?.data?.detail || 'Failed to fetch notifications';
+      setPageError(detail);
+      ui.error(detail);
     } finally {
       setLoading(false);
     }
@@ -31,6 +39,7 @@ export default function NotificationsPage() {
       fetchData();
     } catch (err) {
       console.error("Failed to mark as read", err);
+      ui.error(err.response?.data?.detail || 'Failed to mark notification as read');
     }
   };
 
@@ -45,7 +54,7 @@ export default function NotificationsPage() {
       fetchData();
     } catch (err) {
       const detail = err.response?.data?.detail || "Failed to respond";
-      alert(detail);
+      ui.error(detail);
     } finally {
       setRespondingId(null);
     }
@@ -85,6 +94,8 @@ export default function NotificationsPage() {
         </div>
       </header>
 
+      {pageError && <ErrorStateStandard message={pageError} onRetry={fetchData} />}
+
       {/* Stats Row */}
       <div className="stats-row">
         <div className="stat-card-mini">
@@ -100,16 +111,13 @@ export default function NotificationsPage() {
       {/* Notifications List */}
       <div className="notifications-card">
         {loading ? (
-          <div className="table-loading">
-            <div className="loading-spinner"></div>
-            <span>Loading notifications...</span>
-          </div>
+          <TableSkeleton rows={8} columns={3} label="Loading notifications..." />
         ) : notifications.length === 0 ? (
-          <div className="notifications-empty">
-            <span className="material-symbols-outlined">notifications_off</span>
-            <p>No notifications yet</p>
-            <span className="notifications-empty-hint">You're all caught up!</span>
-          </div>
+          <EmptyStateStandard
+            icon="notifications_off"
+            title="No notifications yet"
+            message="You are all caught up."
+          />
         ) : (
           <div className="notifications-list">
             {notifications.map(notif => {

@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { notificationsAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { useUIFeedback } from '../context/UIFeedbackContext';
+import { TableSkeleton, ErrorStateStandard } from '../components/DataStates';
 import '../components/notifications/Notifications.css';
 
 const DEFAULT_TYPES = [
@@ -22,8 +24,10 @@ const ADMIN_TYPES = [
 
 export default function NotificationSettings() {
   const { isSuperAdmin, isAdmin } = useAuth();
+  const ui = useUIFeedback();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [pageError, setPageError] = useState('');
   const [prefs, setPrefs] = useState({
     enabled_types: [],
     enabled_channels: [],
@@ -37,8 +41,11 @@ export default function NotificationSettings() {
   const hasAdminFields = isSuperAdmin || isAdmin;
   const availableTypes = hasAdminFields ? [...DEFAULT_TYPES, ...ADMIN_TYPES] : DEFAULT_TYPES;
 
-  useEffect(() => {
-    notificationsAPI.getPreferences().then(res => {
+  const fetchPreferences = async () => {
+    try {
+      setLoading(true);
+      setPageError('');
+      const res = await notificationsAPI.getPreferences();
       setPrefs({
         enabled_types: res.data.enabled_types || [],
         enabled_channels: res.data.enabled_channels || [],
@@ -48,21 +55,28 @@ export default function NotificationSettings() {
         suppress_on_leave: res.data.suppress_on_leave ?? true,
         suppress_on_holiday: res.data.suppress_on_holiday ?? true
       });
-      setLoading(false);
-    }).catch(err => {
+    } catch (err) {
       console.error(err);
+      const detail = err.response?.data?.detail || 'Failed to load notification settings.';
+      setPageError(detail);
+      ui.error(detail);
+    } finally {
       setLoading(false);
-    });
+    }
+  };
+
+  useEffect(() => {
+    fetchPreferences();
   }, []);
 
   const handleSave = async () => {
     setSaving(true);
     try {
       await notificationsAPI.updatePreferences(prefs);
-      alert('Preferences saved successfully!'); // We could use a toast here
+      ui.success('Preferences saved successfully!');
     } catch (err) {
       console.error(err);
-      alert('Failed to save preferences.');
+      ui.error('Failed to save preferences.');
     } finally {
       setSaving(false);
     }
@@ -86,12 +100,20 @@ export default function NotificationSettings() {
     });
   };
 
-  if (loading) return <div className="page-wrapper"><div className="skeleton" style={{ height: '500px' }}></div></div>;
+  if (loading) {
+    return (
+      <div className="page-wrapper" style={{ padding: '24px', maxWidth: '900px', margin: '0 auto' }}>
+        <TableSkeleton rows={10} columns={3} label="Loading notification settings..." />
+      </div>
+    );
+  }
 
   return (
     <div className="page-wrapper" style={{ padding: '24px', maxWidth: '900px', margin: '0 auto' }}>
       <h1 className="header-title" style={{ marginBottom: '8px' }}>Notification Settings</h1>
       <p style={{ color: 'var(--text-secondary)', marginBottom: '32px' }}>Configure how and when you want to be alerted.</p>
+
+      {pageError && <ErrorStateStandard message={pageError} onRetry={fetchPreferences} retryLabel="Retry" />}
       
       {/* SECTION 1: CHANNELS */}
       <section className="glass-card" style={{ padding: '24px', marginBottom: '24px' }}>

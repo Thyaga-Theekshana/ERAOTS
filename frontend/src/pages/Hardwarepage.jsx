@@ -1,9 +1,54 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { hardwareAPI } from '../services/api';
+import { useUIFeedback } from '../context/UIFeedbackContext';
+import { TableSkeleton, EmptyStateStandard, ErrorStateStandard } from '../components/DataStates';
+
+const isPlainObject = (value) => value && typeof value === 'object' && !Array.isArray(value);
+
+const normalizeScanner = (scanner, index = 0) => {
+  if (!isPlainObject(scanner)) {
+    return {
+      scanner_id: `unknown-${index}`,
+      name: 'Unknown Scanner',
+      door_name: 'Unknown Door',
+      status: 'OFFLINE',
+      uptime_percentage: 0,
+      error_rate_pct: 0,
+      last_heartbeat: null,
+    };
+  }
+
+  return {
+    ...scanner,
+    scanner_id: scanner.scanner_id || `unknown-${index}`,
+    name: scanner.name || 'Unknown Scanner',
+    door_name: scanner.door_name || 'Unknown Door',
+    status: scanner.status || 'OFFLINE',
+    uptime_percentage: Number.isFinite(Number(scanner.uptime_percentage)) ? Number(scanner.uptime_percentage) : 0,
+    error_rate_pct: Number.isFinite(Number(scanner.error_rate_pct)) ? Number(scanner.error_rate_pct) : 0,
+    last_heartbeat: scanner.last_heartbeat || null,
+  };
+};
+
+const normalizeLogs = (payload) => {
+  if (!Array.isArray(payload)) {
+    return [];
+  }
+
+  return payload.filter(isPlainObject).map((log, index) => ({
+    ...log,
+    log_id: log.log_id ?? `log-${index}`,
+    status: log.status || 'UNKNOWN',
+    checked_at: log.checked_at || null,
+    response_time_ms: Number.isFinite(Number(log.response_time_ms)) ? Number(log.response_time_ms) : null,
+    error_message: log.error_message || '',
+  }));
+};
 
 export default function HardwarePage() {
   const { user } = useAuth();
+  const ui = useUIFeedback();
   const [scanners, setScanners] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -25,10 +70,11 @@ export default function HardwarePage() {
       setLoading(true);
       setError(null);
       const response = await hardwareAPI.getHealth();
-      setScanners(response.data);
+      setScanners(Array.isArray(response.data) ? response.data.map((scanner, index) => normalizeScanner(scanner, index)) : []);
     } catch (err) {
       setError(err.message || 'Failed to load scanner health');
       console.error('Failed to load scanner health:', err);
+      setScanners([]);
     } finally {
       setLoading(false);
     }
@@ -40,9 +86,9 @@ export default function HardwarePage() {
       await hardwareAPI.restart(scannerId);
       // Optimistically update
       setScanners(prev => prev.map(s => s.scanner_id === scannerId ? { ...s, status: 'DEGRADED' } : s));
-      alert('Restart signal transmitted successfully');
+      ui.success('Restart signal transmitted successfully');
     } catch (err) {
-      alert('Failed to transmit restart signal: ' + err.message);
+      ui.error('Failed to transmit restart signal: ' + err.message);
     } finally {
       setActionLoading(false);
     }
@@ -54,9 +100,10 @@ export default function HardwarePage() {
       setLogsModalOpen(true);
       setScannerLogs([]); // clear old
       const res = await hardwareAPI.getHealthHistory(scannerId);
-      setScannerLogs(res.data);
+      setScannerLogs(normalizeLogs(res.data));
     } catch (err) {
-      alert('Failed to fetch scanner logs: ' + err.message);
+      ui.error('Failed to fetch scanner logs: ' + err.message);
+      setScannerLogs([]);
     }
   };
 
@@ -98,18 +145,16 @@ export default function HardwarePage() {
         </div>
       </div>
 
-      {error && (
-        <div className="alert alert-error" style={{ marginBottom: '20px' }}>
-          <span className="material-symbols-outlined">error</span>
-          <span>{error}</span>
-        </div>
-      )}
+      {error && <ErrorStateStandard message={error} onRetry={loadScannerHealth} />}
 
       {loading ? (
-        <div style={{ textAlign: 'center', padding: '40px' }}>
-          <div className="spinner"></div>
-          <p>Loading scanner health...</p>
-        </div>
+        <TableSkeleton rows={6} columns={4} label="Loading scanner health..." />
+      ) : scanners.length === 0 ? (
+        <EmptyStateStandard
+          icon="devices"
+          title="No scanner health data"
+          message="Scanner health records will appear after scanners are provisioned."
+        />
       ) : (
         <div className="bento-grid">
           {/* Summary Cards */}

@@ -6,6 +6,21 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { authAPI, attendanceAPI, leaveAPI, calendarAPI } from '../services/api';
 
+const isPlainObject = (value) => value && typeof value === 'object' && !Array.isArray(value);
+
+const normalizeCalendarSettings = (payload) => {
+  if (!isPlainObject(payload)) {
+    return null;
+  }
+
+  return {
+    ...payload,
+    provider: payload.provider || '',
+    is_enabled: Boolean(payload.is_enabled),
+    last_sync_at: payload.last_sync_at || null,
+  };
+};
+
 export default function ProfilePage() {
   const { user, refreshUser } = useAuth();
   const [editing, setEditing] = useState(false);
@@ -46,9 +61,10 @@ export default function ProfilePage() {
   const fetchCalendarSettings = async () => {
     try {
       const res = await calendarAPI.getSettings();
-      setCalendarSettings(res.data);
+      setCalendarSettings(normalizeCalendarSettings(res.data));
     } catch (err) {
       console.error('Failed to fetch calendar settings:', err);
+      setCalendarSettings(null);
     }
   };
 
@@ -56,8 +72,11 @@ export default function ProfilePage() {
     setCalendarLoading(true);
     try {
       const res = await calendarAPI.getConnectUrl();
-      if (res.data && res.data.auth_url) {
+      if (isPlainObject(res.data) && typeof res.data.auth_url === 'string' && res.data.auth_url.length > 0) {
         window.location.href = res.data.auth_url;
+      } else {
+        setMessage({ type: 'error', text: 'Calendar connect URL is unavailable' });
+        setCalendarLoading(false);
       }
     } catch (err) {
       setMessage({ type: 'error', text: err.response?.data?.detail || 'Failed to connect calendar' });
@@ -103,8 +122,8 @@ export default function ProfilePage() {
         leaveAPI.myRequests(),
       ]);
       
-      const records = attendanceRes.data || [];
-      const leaves = leaveRes.data || [];
+      const records = Array.isArray(attendanceRes.data) ? attendanceRes.data : [];
+      const leaves = Array.isArray(leaveRes.data) ? leaveRes.data : [];
       
       setStats({
         presentDays: records.filter(r => r.status === 'PRESENT' || r.status === 'LATE').length,

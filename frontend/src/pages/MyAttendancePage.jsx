@@ -5,11 +5,15 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { attendanceAPI } from '../services/api';
+import { useUIFeedback } from '../context/UIFeedbackContext';
+import { TableSkeleton, EmptyStateStandard, ErrorStateStandard } from '../components/DataStates';
 
 export default function MyAttendancePage() {
   const { user } = useAuth();
+  const ui = useUIFeedback();
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [pageError, setPageError] = useState('');
   const [view, setView] = useState('list'); // 'list' or 'calendar'
   const [dateRange, setDateRange] = useState(() => {
     const now = new Date();
@@ -36,6 +40,7 @@ export default function MyAttendancePage() {
     
     setLoading(true);
     try {
+      setPageError('');
       const res = await attendanceAPI.list({
         employee_id: user.employee_id,
         start_date: dateRange.start,
@@ -54,6 +59,9 @@ export default function MyAttendancePage() {
       });
     } catch (err) {
       console.error('Failed to fetch attendance:', err);
+      const detail = err.response?.data?.detail || 'Failed to fetch attendance data.';
+      setPageError(detail);
+      ui.error(detail);
     } finally {
       setLoading(false);
     }
@@ -126,6 +134,8 @@ export default function MyAttendancePage() {
         </div>
       </header>
 
+      {pageError && <ErrorStateStandard message={pageError} onRetry={fetchAttendance} />}
+
       {/* Stats Row */}
       <div className="stats-row">
         <div className="mini-stat-card">
@@ -182,15 +192,13 @@ export default function MyAttendancePage() {
 
       {/* Content */}
       {loading ? (
-        <div className="table-loading">
-          <div className="loading-spinner"></div>
-          <span>Loading attendance...</span>
-        </div>
+        <TableSkeleton rows={8} columns={5} label="Loading your attendance records..." />
       ) : records.length === 0 ? (
-        <div className="empty-state">
-          <span className="material-symbols-outlined">event_busy</span>
-          <p>No attendance records for this period</p>
-        </div>
+        <EmptyStateStandard
+          icon="event_busy"
+          title="No attendance records"
+          message="No attendance data is available for the selected period."
+        />
       ) : (
         <div className="attendance-list glass-card">
           <table className="data-table">

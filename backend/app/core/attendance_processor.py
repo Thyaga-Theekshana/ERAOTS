@@ -29,6 +29,40 @@ import logging
 logger = logging.getLogger("eraots.attendance_processor")
 
 
+async def _get_effective_policy(
+    db: AsyncSession,
+    policy_type: str,
+    department_id: Optional[uuid.UUID] = None,
+) -> Optional[Policy]:
+    """
+    Resolve policy with FR15 precedence:
+    department-specific override > global default.
+    """
+    if department_id:
+        dep_policy = (
+            await db.execute(
+                select(Policy).where(
+                    Policy.policy_type == policy_type,
+                    Policy.department_id == department_id,
+                    Policy.is_active == True,
+                )
+            )
+        ).scalars().first()
+        if dep_policy:
+            return dep_policy
+
+    global_policy = (
+        await db.execute(
+            select(Policy).where(
+                Policy.policy_type == policy_type,
+                Policy.department_id.is_(None),
+                Policy.is_active == True,
+            )
+        )
+    ).scalars().first()
+    return global_policy
+
+
 class StatusTransition:
     """Helper class to track status changes within a day."""
     def __init__(self, timestamp: datetime, status: str, source: str):
@@ -167,6 +201,10 @@ async def process_daily_attendance(db: AsyncSession, target_date: date, employee
         scheduled_start = None
         scheduled_end = None
         schedule_grace_minutes = settings.GRACE_PERIOD_MINUTES
+
+        grace_policy = await _get_effective_policy(db, "GRACE_PERIOD", emp.department_id)
+        if grace_policy and isinstance(grace_policy.value, dict):
+            schedule_grace_minutes = int(grace_policy.value.get("minutes", schedule_grace_minutes))
         if schedule:
             scheduled_start, scheduled_end, _, schedule_grace_minutes = get_schedule_window(
                 target_date, schedule
@@ -261,20 +299,14 @@ async def process_daily_attendance(db: AsyncSession, target_date: date, employee
         if scheduled_start:
             expected_arrival = scheduled_start + timedelta(minutes=schedule_grace_minutes)
         else:
-            start_time_policy = (
-                await db.execute(
-                    select(Policy).where(
-                        and_(Policy.policy_type == "START_TIME", Policy.is_active == True)
-                    )
-                )
-            ).scalars().first()
+            start_time_policy = await _get_effective_policy(db, "START_TIME", emp.department_id)
             office_start_hour = int(start_time_policy.value.get("hour", 9)) if start_time_policy else 9
             office_start_min = int(start_time_policy.value.get("minute", 0)) if start_time_policy else 0
             expected_arrival = datetime.combine(
                 target_date,
                 datetime.min.time().replace(hour=office_start_hour, minute=office_start_min),
                 tzinfo=timezone.utc,
-            ) + timedelta(minutes=settings.GRACE_PERIOD_MINUTES)
+            ) + timedelta(minutes=schedule_grace_minutes)
         
         is_late = False
         late_duration_min = 0
@@ -287,13 +319,7 @@ async def process_daily_attendance(db: AsyncSession, target_date: date, employee
         # Overtime is productive time beyond scheduled shift end (FR4.3).
         # Fallback to threshold policy only when no schedule is assigned.
         if not scheduled_end:
-            ot_policy = (
-                await db.execute(
-                    select(Policy).where(
-                        and_(Policy.policy_type == "OVERTIME_THRESHOLD", Policy.is_active == True)
-                    )
-                )
-            ).scalars().first()
+            ot_policy = await _get_effective_policy(db, "OVERTIME_THRESHOLD", emp.department_id)
             threshold_min = int(ot_policy.value.get("threshold_min", 480)) if ot_policy else 480
             overtime_min = max(0, total_productive_minutes - threshold_min)
 

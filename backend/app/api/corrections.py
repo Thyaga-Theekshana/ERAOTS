@@ -11,6 +11,7 @@ from app.core.dependencies import get_current_user
 from app.models.employee import UserAccount, Employee, Department
 from app.models.corrections import CorrectionRequest
 from app.models.events import ScanEvent
+from app.models.policies import Policy
 from app.api.schemas import (
     CorrectionRequestCreate,
     CorrectionRequestResponse,
@@ -18,6 +19,38 @@ from app.api.schemas import (
 )
 
 router = APIRouter(prefix="/api/corrections", tags=["Corrections"])
+
+
+async def _get_effective_correction_window_days(
+    db: AsyncSession,
+    department_id: Optional[uuid.UUID],
+) -> int:
+    if department_id:
+        dep_policy = (
+            await db.execute(
+                select(Policy).where(
+                    Policy.policy_type == "CORRECTION_WINDOW",
+                    Policy.department_id == department_id,
+                    Policy.is_active == True,
+                )
+            )
+        ).scalars().first()
+        if dep_policy and isinstance(dep_policy.value, dict):
+            return int(dep_policy.value.get("days", 7))
+
+    global_policy = (
+        await db.execute(
+            select(Policy).where(
+                Policy.policy_type == "CORRECTION_WINDOW",
+                Policy.department_id.is_(None),
+                Policy.is_active == True,
+            )
+        )
+    ).scalars().first()
+    if global_policy and isinstance(global_policy.value, dict):
+        return int(global_policy.value.get("days", 7))
+
+    return 7
 
 def build_response(r: CorrectionRequest) -> CorrectionRequestResponse:
     m_name = f"{r.manager.first_name} {r.manager.last_name}" if getattr(r, 'manager', None) else None
@@ -48,10 +81,16 @@ async def submit_correction(
     current_user: UserAccount = Depends(get_current_user)
 ):
     """FR14: Employee submits a correction request."""
-    # Validation: Only last 7 days allowed
-    seven_days_ago = datetime.now(timezone.utc).date() - timedelta(days=7)
-    if data.correction_date < seven_days_ago:
-        raise HTTPException(status_code=400, detail="Corrections are only allowed for the past 7 days.")
+    correction_window_days = await _get_effective_correction_window_days(
+        db,
+        current_user.employee.department_id if current_user.employee else None,
+    )
+    window_start = datetime.now(timezone.utc).date() - timedelta(days=correction_window_days)
+    if data.correction_date < window_start:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Corrections are only allowed for the past {correction_window_days} days.",
+        )
         
     if data.proposed_time.date() != data.correction_date:
         raise HTTPException(status_code=400, detail="Proposed time must be on the correction date.")

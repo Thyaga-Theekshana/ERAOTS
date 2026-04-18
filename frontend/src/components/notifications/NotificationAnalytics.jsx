@@ -5,6 +5,30 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recha
 
 const COLORS = ['#8884d8', '#82ca9d', '#ffc658', '#ff8042', '#0088fe', '#00c49f', '#ffbb28'];
 
+const isPlainObject = (value) => value && typeof value === 'object' && !Array.isArray(value);
+
+const toNumber = (value, fallback = 0) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const normalizeAnalytics = (payload) => {
+  if (!isPlainObject(payload)) {
+    return null;
+  }
+
+  const byType = isPlainObject(payload.by_type) ? payload.by_type : {};
+  const topAlerted = Array.isArray(payload.top_alerted_employees) ? payload.top_alerted_employees : [];
+
+  return {
+    ...payload,
+    total_sent_today: toNumber(payload.total_sent_today, 0),
+    suppressed_today: toNumber(payload.suppressed_today, 0),
+    by_type: byType,
+    top_alerted_employees: topAlerted.filter(isPlainObject),
+  };
+};
+
 export default function NotificationAnalytics() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -14,12 +38,18 @@ export default function NotificationAnalytics() {
   useEffect(() => {
     notificationsAPI.getAnalytics()
       .then(res => {
-        setData(res.data);
+        const normalized = normalizeAnalytics(res.data);
+        if (!normalized) {
+          throw new Error('Invalid notification analytics response');
+        }
+        setData(normalized);
+        setError(false);
         setLoading(false);
       })
       .catch(err => {
         console.error(err);
         setError(true);
+        setData(null);
         setLoading(false);
       });
   }, []);
@@ -39,8 +69,8 @@ export default function NotificationAnalytics() {
 
   const pieData = Object.entries(data.by_type || {}).map(([key, value]) => ({
     name: key.replace('_', ' '),
-    value
-  }));
+    value: toNumber(value, 0)
+  })).filter(item => item.value > 0);
 
   return (
     <div className="bento-events-card" style={{ gridColumn: 'span 12', marginTop: '1rem' }}>
@@ -98,14 +128,14 @@ export default function NotificationAnalytics() {
                 <div 
                   key={idx} 
                   style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px', background: 'rgba(255,255,255,0.02)', borderRadius: '6px', cursor: 'pointer' }}
-                  onClick={() => navigate(`/employees/${emp.employee_id}`)}
+                  onClick={() => emp.employee_id ? navigate(`/employees/${emp.employee_id}`) : null}
                 >
                   <div>
-                    <div style={{ fontWeight: 500, fontSize: '0.9rem' }}>{emp.name}</div>
-                    <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>{emp.most_common_type}</div>
+                    <div style={{ fontWeight: 500, fontSize: '0.9rem' }}>{emp.name || 'Unknown employee'}</div>
+                    <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>{emp.most_common_type || 'Unknown type'}</div>
                   </div>
                   <div style={{ background: 'rgba(255,255,255,0.1)', padding: '2px 8px', borderRadius: '12px', fontSize: '0.8rem', fontWeight: 600 }}>
-                    {emp.count}
+                    {toNumber(emp.count, 0)}
                   </div>
                 </div>
               ))}

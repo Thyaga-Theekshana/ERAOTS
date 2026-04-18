@@ -9,6 +9,7 @@
  */
 import { useState, useEffect, useCallback } from "react";
 import { attendanceAPI } from "../services/api";
+import { useUIFeedback } from '../context/UIFeedbackContext';
 import {
   BarChart,
   Bar,
@@ -21,6 +22,24 @@ import {
   Area,
   AreaChart,
 } from "recharts";
+
+const isPlainObject = (value) => value && typeof value === 'object' && !Array.isArray(value);
+
+const normalizePersonalInsights = (payload) => {
+  if (!isPlainObject(payload)) {
+    return null;
+  }
+
+  return {
+    ...payload,
+    punctuality: isPlainObject(payload.punctuality) ? payload.punctuality : {},
+    late_risk: isPlainObject(payload.late_risk) ? payload.late_risk : {},
+    summary: isPlainObject(payload.summary) ? payload.summary : {},
+    desk_vs_building: Array.isArray(payload.desk_vs_building) ? payload.desk_vs_building : [],
+    arrival_trends: Array.isArray(payload.arrival_trends) ? payload.arrival_trends : [],
+    monthly_trends: Array.isArray(payload.monthly_trends) ? payload.monthly_trends : [],
+  };
+};
 
 // ─── Score Ring SVG Component ──────────────────────────────────────────
 function ScoreRing({ score, grade, size = 160 }) {
@@ -154,6 +173,7 @@ function GlassTooltip({ active, payload, label, formatter }) {
 
 // ─── Main Page Component ───────────────────────────────────────────────
 export default function PersonalInsightsPage() {
+  const ui = useUIFeedback();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -164,10 +184,16 @@ export default function PersonalInsightsPage() {
       setLoading(true);
       setError(null);
       const res = await attendanceAPI.myInsights(timeRange);
-      setData(res.data);
+      const normalized = normalizePersonalInsights(res.data);
+      if (!normalized) {
+        throw new Error('Unexpected personal insights response');
+      }
+      setData(normalized);
     } catch (err) {
       console.error("Failed to load insights:", err);
       setError("Unable to load insights. Please try again.");
+      ui.error(err.response?.data?.detail || 'Unable to load insights. Please try again.');
+      setData(null);
     } finally {
       setLoading(false);
     }

@@ -22,6 +22,37 @@ from app.api.schemas import (
 router = APIRouter(prefix="/api", tags=["Employees & Departments"])
 
 
+def _normalize_sl_phone(phone: str) -> str:
+    """
+    Accept Sri Lankan formats:
+    - 0XXXXXXXXX (10 digits)
+    - +94XXXXXXXXX (country code + 9 digits)
+    Returns normalized +94XXXXXXXXX format.
+    """
+    if phone is None:
+        return None
+
+    raw = phone.strip().replace(" ", "").replace("-", "")
+    if not raw:
+        return None
+
+    if raw.startswith("+"):
+        if len(raw) == 12 and raw.startswith("+94") and raw[1:].isdigit():
+            return raw
+        raise HTTPException(
+            status_code=400,
+            detail="Phone must be 10 digits starting with 0, or +94 followed by 9 digits",
+        )
+
+    if raw.isdigit() and len(raw) == 10 and raw.startswith("0"):
+        return f"+94{raw[1:]}"
+
+    raise HTTPException(
+        status_code=400,
+        detail="Phone must be 10 digits starting with 0, or +94 followed by 9 digits",
+    )
+
+
 # ==================== EMPLOYEES ====================
 
 @router.post("/employees", response_model=EmployeeResponse, status_code=201)
@@ -46,19 +77,42 @@ async def create_employee(
     if not role:
         raise HTTPException(status_code=400, detail=f"Role '{data.role_name}' not found")
     
+    # Validate role-specific constraints
+    role_name = role.name
+    if role_name == "MANAGER" and not data.managed_department_id:
+        raise HTTPException(status_code=400, detail="managed_department_id is required for MANAGER role")
+
+    if role_name == "HR_MANAGER" and data.job_title:
+        raise HTTPException(status_code=400, detail="HR Manager should not include job_title")
+
+    # Validate phone format (Sri Lanka)
+    normalized_phone = _normalize_sl_phone(data.phone) if data.phone else None
+
     # Create employee
     employee = Employee(
         first_name=data.first_name,
         last_name=data.last_name,
         email=data.email,
-        phone=data.phone,
+        phone=normalized_phone,
         department_id=data.department_id,
         fingerprint_hash=hash_fingerprint(data.fingerprint_id) if data.fingerprint_id else None,
         hire_date=data.hire_date,
-        job_title=data.job_title,
+        job_title=None if role_name == "HR_MANAGER" else data.job_title,
     )
     db.add(employee)
     await db.flush()  # Get the employee ID
+
+    # Manager role assignment to department
+    if role_name == "MANAGER":
+        dept_result = await db.execute(
+            select(Department).where(Department.department_id == data.managed_department_id)
+        )
+        managed_dept = dept_result.scalar_one_or_none()
+        if not managed_dept:
+            raise HTTPException(status_code=400, detail="Managed department not found")
+        managed_dept.manager_id = employee.employee_id
+        # Manager always belongs to the department they manage
+        employee.department_id = managed_dept.department_id
     
     # Create user account
     user_account = UserAccount(
@@ -198,7 +252,7 @@ async def update_employee(
     if data.last_name is not None:
         emp.last_name = data.last_name
     if data.phone is not None:
-        emp.phone = data.phone
+        emp.phone = _normalize_sl_phone(data.phone) if data.phone else None
     if data.department_id is not None:
         emp.department_id = data.department_id
     if data.fingerprint_id is not None:

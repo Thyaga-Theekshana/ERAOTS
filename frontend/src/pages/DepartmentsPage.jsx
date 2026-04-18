@@ -1,9 +1,13 @@
 import { useState, useEffect } from 'react';
 import { departmentAPI } from '../services/api';
+import { useUIFeedback } from '../context/UIFeedbackContext';
+import { TableSkeleton, EmptyStateStandard, ErrorStateStandard } from '../components/DataStates';
 
 export default function DepartmentsPage() {
+  const ui = useUIFeedback();
   const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [pageError, setPageError] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formData, setFormData] = useState({ name: '', description: '' });
   const [error, setError] = useState('');
@@ -17,10 +21,15 @@ export default function DepartmentsPage() {
   const fetchDepartments = async () => {
     try {
       setLoading(true);
+      setPageError('');
       const res = await departmentAPI.list();
-      setDepartments(res.data);
+      setDepartments(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.error("Failed to fetch departments", err);
+      const detail = err.response?.data?.detail || 'Failed to load departments.';
+      setPageError(detail);
+      ui.error(detail);
+      setDepartments([]);
     } finally {
       setLoading(false);
     }
@@ -81,6 +90,8 @@ export default function DepartmentsPage() {
         </div>
       </header>
 
+      {pageError && <ErrorStateStandard message={pageError} onRetry={fetchDepartments} />}
+
       {/* Stats Row */}
       <div className="stats-row">
         <div className="stat-card-mini">
@@ -116,10 +127,13 @@ export default function DepartmentsPage() {
         </div>
 
         {loading ? (
-          <div className="table-loading">
-            <div className="loading-spinner"></div>
-            <span>Loading departments...</span>
-          </div>
+          <TableSkeleton rows={6} columns={5} label="Loading departments..." />
+        ) : departments.length === 0 ? (
+          <EmptyStateStandard
+            icon="folder_off"
+            title="No departments configured"
+            message="Create your first department to organize personnel."
+          />
         ) : (
           <div className="table-wrapper">
             <table className="premium-table">
@@ -133,49 +147,40 @@ export default function DepartmentsPage() {
                 </tr>
               </thead>
               <tbody>
-                {departments.length === 0 ? (
-                  <tr>
-                    <td colSpan="5" className="table-empty">
-                      <span className="material-symbols-outlined">folder_off</span>
-                      <p>No departments configured yet</p>
+                {departments.map(dept => (
+                  <tr key={dept.department_id}>
+                    <td>
+                      <div className="table-cell-primary">
+                        <div className="dept-icon">
+                          <span className="material-symbols-outlined">groups</span>
+                        </div>
+                        <span className="table-cell-name">{dept.name}</span>
+                      </div>
+                    </td>
+                    <td>
+                      <span className="table-cell-secondary">
+                        {dept.description || 'No description'}
+                      </span>
+                    </td>
+                    <td>
+                      <span className="table-cell-metric">{dept.employee_count}</span>
+                    </td>
+                    <td>
+                      <span className={`status-chip ${dept.is_active ? 'status-chip--active' : 'status-chip--inactive'}`}>
+                        {dept.is_active ? 'Active' : 'Inactive'}
+                      </span>
+                    </td>
+                    <td>
+                      <button
+                        className="table-action-btn"
+                        onClick={() => handleEditClick(dept)}
+                        title="Edit Department"
+                      >
+                        <span className="material-symbols-outlined">edit</span>
+                      </button>
                     </td>
                   </tr>
-                ) : (
-                  departments.map(dept => (
-                    <tr key={dept.department_id}>
-                      <td>
-                        <div className="table-cell-primary">
-                          <div className="dept-icon">
-                            <span className="material-symbols-outlined">groups</span>
-                          </div>
-                          <span className="table-cell-name">{dept.name}</span>
-                        </div>
-                      </td>
-                      <td>
-                        <span className="table-cell-secondary">
-                          {dept.description || 'No description'}
-                        </span>
-                      </td>
-                      <td>
-                        <span className="table-cell-metric">{dept.employee_count}</span>
-                      </td>
-                      <td>
-                        <span className={`status-chip ${dept.is_active ? 'status-chip--active' : 'status-chip--inactive'}`}>
-                          {dept.is_active ? 'Active' : 'Inactive'}
-                        </span>
-                      </td>
-                      <td>
-                        <button 
-                          className="table-action-btn"
-                          onClick={() => handleEditClick(dept)}
-                          title="Edit Department"
-                        >
-                          <span className="material-symbols-outlined">edit</span>
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
+                ))}
               </tbody>
             </table>
           </div>

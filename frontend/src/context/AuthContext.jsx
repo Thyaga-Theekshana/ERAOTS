@@ -12,6 +12,20 @@ const ROLE_HIERARCHY = ['EMPLOYEE', 'MANAGER', 'HR_MANAGER', 'SUPER_ADMIN'];
 // Roles that have a dual portal (personal + managerial)
 const DUAL_PORTAL_ROLES = ['MANAGER', 'HR_MANAGER'];
 
+const isPlainObject = (value) => value && typeof value === 'object' && !Array.isArray(value);
+
+const normalizeUser = (payload) => {
+  if (!isPlainObject(payload)) {
+    return null;
+  }
+
+  return {
+    ...payload,
+    permissions: isPlainObject(payload.permissions) ? payload.permissions : {},
+    role: typeof payload.role === 'string' ? payload.role : 'EMPLOYEE',
+  };
+};
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -24,7 +38,7 @@ export function AuthProvider({ children }) {
     const token = localStorage.getItem('eraots_token');
     if (token) {
       authAPI.getMe()
-        .then(res => setUser(res.data))
+        .then(res => setUser(normalizeUser(res.data)))
         .catch(() => {
           localStorage.removeItem('eraots_token');
           setUser(null);
@@ -37,12 +51,19 @@ export function AuthProvider({ children }) {
 
   const login = async (email, password) => {
     const res = await authAPI.login(email, password);
-    const { access_token } = res.data;
+    const access_token = res?.data?.access_token;
+    if (!access_token) {
+      throw new Error('Login response did not include an access token');
+    }
     localStorage.setItem('eraots_token', access_token);
     
     // Fetch full user info
     const meRes = await authAPI.getMe();
-    const userData = meRes.data;
+    const userData = normalizeUser(meRes.data);
+    if (!userData) {
+      localStorage.removeItem('eraots_token');
+      throw new Error('Invalid user profile received from server');
+    }
     setUser(userData);
 
     // Default portal mode based on role
@@ -61,8 +82,9 @@ export function AuthProvider({ children }) {
 
   const refreshUser = async () => {
     const meRes = await authAPI.getMe();
-    setUser(meRes.data);
-    return meRes.data;
+    const userData = normalizeUser(meRes.data);
+    setUser(userData);
+    return userData;
   };
 
   const setPortalMode = (mode) => {
@@ -134,4 +156,3 @@ export function useAuth() {
   if (!context) throw new Error('useAuth must be used within AuthProvider');
   return context;
 }
-

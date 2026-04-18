@@ -8,6 +8,7 @@
  */
 import { useState, useEffect, useCallback } from "react";
 import { attendanceAPI } from "../services/api";
+import { useUIFeedback } from '../context/UIFeedbackContext';
 import {
   BarChart,
   Bar,
@@ -21,6 +22,24 @@ import {
   Line,
   ReferenceLine,
 } from "recharts";
+
+const isPlainObject = (value) => value && typeof value === 'object' && !Array.isArray(value);
+
+const normalizeCompanyInsights = (payload) => {
+  if (!isPlainObject(payload)) {
+    return null;
+  }
+
+  return {
+    ...payload,
+    heatmap: Array.isArray(payload.heatmap) ? payload.heatmap : [],
+    policy_sim: Array.isArray(payload.policy_sim) ? payload.policy_sim : [],
+    department_comparison: Array.isArray(payload.department_comparison) ? payload.department_comparison : [],
+    total_employees_analyzed: Number.isFinite(Number(payload.total_employees_analyzed)) ? Number(payload.total_employees_analyzed) : 0,
+    current_late_rate_pct: Number.isFinite(Number(payload.current_late_rate_pct)) ? Number(payload.current_late_rate_pct) : 0,
+    current_office_start: payload.current_office_start || '09:00',
+  };
+};
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 const DAYS_SHORT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -435,6 +454,7 @@ function DeptComparison({ departments }) {
 
 // ─── Main Page ──────────────────────────────────────────────────────────────
 export default function CompanyInsightsPage() {
+  const ui = useUIFeedback();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -445,10 +465,16 @@ export default function CompanyInsightsPage() {
       setLoading(true);
       setError(null);
       const res = await attendanceAPI.companyInsights(timeRange);
-      setData(res.data);
+      const normalized = normalizeCompanyInsights(res.data);
+      if (!normalized) {
+        throw new Error('Unexpected company insights response');
+      }
+      setData(normalized);
     } catch (err) {
       console.error("Failed to load company insights:", err);
       setError("Unable to load insights. Please try again.");
+      ui.error(err.response?.data?.detail || 'Unable to load company insights. Please try again.');
+      setData(null);
     } finally {
       setLoading(false);
     }

@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { notificationsAPI } from '../services/api';
+import { useUIFeedback } from '../context/UIFeedbackContext';
+import { TableSkeleton, EmptyStateStandard, ErrorStateStandard } from '../components/DataStates';
 import '../components/notifications/Notifications.css';
 
 const PRIORITY_COLORS = {
@@ -25,9 +27,11 @@ const TYPE_ICONS = {
 const ALL_TYPES = Object.keys(TYPE_ICONS).filter(t => t !== 'DEFAULT');
 
 export default function NotificationCenter() {
+  const ui = useUIFeedback();
   const [loading, setLoading] = useState(true);
   const [notifications, setNotifications] = useState([]);
   const [totalCount, setTotalCount] = useState(0);
+  const [pageError, setPageError] = useState('');
 
   // Filters
   const [types, setTypes] = useState(ALL_TYPES);
@@ -46,6 +50,7 @@ export default function NotificationCenter() {
   const fetchItems = async () => {
     setLoading(true);
     try {
+      setPageError('');
       // Mock converting these to actual query params depending on backend support
       // Fallback is we do some client side filtering until the backend route is deeply wired
       const isReadParam = status === 'ALL' ? undefined : status === 'READ';
@@ -69,6 +74,9 @@ export default function NotificationCenter() {
       setTotalCount(res.data.total || 0);
     } catch (err) {
       console.error(err);
+      const detail = err.response?.data?.detail || 'Failed to load notification center data';
+      setPageError(detail);
+      ui.error(detail);
     } finally {
       setLoading(false);
     }
@@ -104,6 +112,7 @@ export default function NotificationCenter() {
       setNotifications(prev => prev.map(n => n.log_id === id ? { ...n, read_at: new Date().toISOString() } : n));
     } catch (error) {
       console.error(error);
+      ui.error(error.response?.data?.detail || 'Failed to mark notification as read');
     }
   };
 
@@ -115,6 +124,7 @@ export default function NotificationCenter() {
       setSelectedIds(new Set());
     } catch (error) {
       console.error(error);
+      ui.error(error.response?.data?.detail || 'Failed to mark selected notifications as read');
     }
   };
 
@@ -135,7 +145,6 @@ export default function NotificationCenter() {
 
   return (
     <div className="page-wrapper" style={{ display: 'flex', gap: '24px', padding: '24px' }}>
-      
       {/* LEFT SIDEBAR (Filters) */}
       <div className="glass-card" style={{ width: '280px', padding: '24px', flexShrink: 0, height: 'fit-content' }}>
         <h3 style={{ marginBottom: '20px' }}>Filters</h3>
@@ -190,6 +199,8 @@ export default function NotificationCenter() {
 
       {/* MAIN CONTENT */}
       <div style={{ flex: 1 }}>
+        {pageError && <ErrorStateStandard message={pageError} onRetry={fetchItems} />}
+
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
           <h2>Notifications <span style={{ color: 'var(--text-muted)', fontSize: '1rem' }}>({totalCount})</span></h2>
           
@@ -207,12 +218,13 @@ export default function NotificationCenter() {
         </div>
 
         {loading ? (
-          <div className="skeleton" style={{ height: '200px', borderRadius: '12px' }}></div>
+          <TableSkeleton rows={8} columns={4} label="Loading notifications..." />
         ) : notifications.length === 0 ? (
-          <div className="glass-card" style={{ padding: '60px', textAlign: 'center', color: 'var(--text-muted)' }}>
-            <span className="material-symbols-outlined" style={{ fontSize: '48px', marginBottom: '16px', opacity: 0.5 }}>notifications_paused</span>
-            <p>No notifications match your filters.</p>
-          </div>
+          <EmptyStateStandard
+            icon="notifications_paused"
+            title="No notifications found"
+            message="No notifications match the current filters."
+          />
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <div style={{ padding: '0 16px', display: 'flex', gap: '16px' }}>

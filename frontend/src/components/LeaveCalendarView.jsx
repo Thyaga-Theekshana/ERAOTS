@@ -3,9 +3,11 @@
  */
 import { useState, useEffect } from 'react';
 import { leaveAPI, downloadBlob } from '../services/api';
+import { useUIFeedback } from '../context/UIFeedbackContext';
 import LeaveRequestModal from './LeaveRequestModal';
 
 export default function LeaveCalendarView({ leaveBalance, onLeaveRequestSubmitted, openRequestTrigger = 0 }) {
+  const ui = useUIFeedback();
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [leaveRequests, setLeaveRequests] = useState([]);
   const [requestHistory, setRequestHistory] = useState([]);
@@ -108,7 +110,7 @@ export default function LeaveCalendarView({ leaveBalance, onLeaveRequestSubmitte
       onLeaveRequestSubmitted();
     } catch (err) {
       console.error('Failed to cancel leave request:', err);
-      alert(err.response?.data?.detail || 'Failed to cancel leave request');
+      ui.error(err.response?.data?.detail || 'Failed to cancel leave request');
     } finally {
       setCancellingRequestId(null);
     }
@@ -133,7 +135,7 @@ export default function LeaveCalendarView({ leaveBalance, onLeaveRequestSubmitte
       .then((res) => downloadBlob(res.data, `leave-history-${monthParam}.csv`))
       .catch((err) => {
         console.error('CSV export failed:', err);
-        alert(err.response?.data?.detail || 'CSV export failed');
+        ui.error(err.response?.data?.detail || 'CSV export failed');
       });
   };
 
@@ -144,7 +146,7 @@ export default function LeaveCalendarView({ leaveBalance, onLeaveRequestSubmitte
       .then((res) => downloadBlob(res.data, `leave-history-${monthParam}.pdf`))
       .catch((err) => {
         console.error('PDF export failed:', err);
-        alert(err.response?.data?.detail || 'PDF export failed');
+        ui.error(err.response?.data?.detail || 'PDF export failed');
       });
   };
 

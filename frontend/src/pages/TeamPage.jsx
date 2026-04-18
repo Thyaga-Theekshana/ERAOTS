@@ -5,9 +5,12 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import { employeeAPI, departmentAPI, attendanceAPI } from "../services/api";
+import { useUIFeedback } from '../context/UIFeedbackContext';
+import { TableSkeleton, EmptyStateStandard, ErrorStateStandard } from '../components/DataStates';
 
 export default function TeamPage() {
   const { user } = useAuth();
+  const ui = useUIFeedback();
   const [employees, setEmployees] = useState([]);
   const [department, setDepartment] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -31,6 +34,7 @@ export default function TeamPage() {
     late: 0,
     onLeave: 0,
   });
+  const [pageError, setPageError] = useState('');
 
   useEffect(() => {
     fetchTeamData();
@@ -44,6 +48,7 @@ export default function TeamPage() {
 
     setLoading(true);
     try {
+      setPageError('');
       // Fetch department info and employees
       const [deptRes, empRes] = await Promise.all([
         departmentAPI.list(),
@@ -92,6 +97,9 @@ export default function TeamPage() {
       );
     } catch (err) {
       console.error("Failed to fetch team data:", err);
+      const detail = err.response?.data?.detail || 'Failed to fetch team data.';
+      setPageError(detail);
+      ui.error(detail);
     } finally {
       setLoading(false);
       setInsightsLoading(false);
@@ -148,6 +156,8 @@ export default function TeamPage() {
           </div>
         </div>
       </header>
+
+      {pageError && <ErrorStateStandard message={pageError} onRetry={fetchTeamData} />}
 
       {/* Team Insights */}
       <div className="stats-row">
@@ -316,15 +326,13 @@ export default function TeamPage() {
 
       {/* Team Members */}
       {loading ? (
-        <div className="table-loading">
-          <div className="loading-spinner"></div>
-          <span>Loading team...</span>
-        </div>
+        <TableSkeleton rows={8} columns={4} label="Loading team members..." />
       ) : employees.length === 0 ? (
-        <div className="empty-state">
-          <span className="material-symbols-outlined">groups</span>
-          <p>No employees in this department</p>
-        </div>
+        <EmptyStateStandard
+          icon="groups"
+          title="No team members found"
+          message="No employees are currently assigned to this department."
+        />
       ) : (
         <div className="team-grid">
           {employees.map((employee) => (

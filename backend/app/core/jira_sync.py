@@ -59,7 +59,11 @@ async def sync_all_jira_productivity(db: AsyncSession) -> int:
     
     # Get Efficiency Threshold Policy
     policy_res = await db.execute(
-        select(Policy).where(Policy.policy_type == "EFFICIENCY_THRESHOLD")
+        select(Policy).where(
+            Policy.policy_type == "EFFICIENCY_THRESHOLD",
+            Policy.department_id.is_(None),
+            Policy.is_active == True,
+        )
     )
     threshold_policy = policy_res.scalar_one_or_none()
     efficiency_threshold = threshold_policy.value.get("threshold_percentage", 70) if threshold_policy else 70

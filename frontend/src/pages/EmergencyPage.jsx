@@ -1,11 +1,46 @@
 import { useState, useEffect } from 'react';
 import { emergencyAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { useUIFeedback } from '../context/UIFeedbackContext';
 import EmergencyNotification from '../components/EmergencyNotification';
 import InDangerEmployeesList from '../components/InDangerEmployeesList';
+import { TableSkeleton, EmptyStateStandard } from '../components/DataStates';
+
+const isPlainObject = (value) => value && typeof value === 'object' && !Array.isArray(value);
+
+const normalizeSafetyCheck = (payload) => {
+  if (!isPlainObject(payload)) {
+    return null;
+  }
+
+  return {
+    ...payload,
+    responses: Array.isArray(payload.responses) ? payload.responses : [],
+    safe_count: Number.isFinite(Number(payload.safe_count)) ? Number(payload.safe_count) : 0,
+    in_danger_count: Number.isFinite(Number(payload.in_danger_count)) ? Number(payload.in_danger_count) : 0,
+    pending_count: Number.isFinite(Number(payload.pending_count)) ? Number(payload.pending_count) : 0,
+    total_employees: Number.isFinite(Number(payload.total_employees)) ? Number(payload.total_employees) : 0,
+  };
+};
+
+const normalizeActiveEmergency = (payload) => {
+  if (!isPlainObject(payload)) {
+    return null;
+  }
+
+  return {
+    ...payload,
+    safety_check_sent: Boolean(payload.safety_check_sent),
+    headcount_entries: Array.isArray(payload.headcount_entries) ? payload.headcount_entries : [],
+    headcount_at_activation: Number.isFinite(Number(payload.headcount_at_activation))
+      ? Number(payload.headcount_at_activation)
+      : 0,
+  };
+};
 
 export default function EmergencyPage() {
   const { user } = useAuth();
+  const ui = useUIFeedback();
   const [activeEmergency, setActiveEmergency] = useState(null);
   const [emergencyHistory, setEmergencyHistory] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
@@ -39,9 +74,10 @@ export default function EmergencyPage() {
   const fetchActive = async () => {
     try {
       const res = await emergencyAPI.getActive();
-      setActiveEmergency(res.data);
+      setActiveEmergency(normalizeActiveEmergency(res.data));
     } catch (err) {
       console.error("Failed to fetch emergency state", err);
+      setActiveEmergency(null);
     } finally {
       setLoading(false);
     }
@@ -51,9 +87,10 @@ export default function EmergencyPage() {
     try {
       setSafetyLoading(true);
       const res = await emergencyAPI.getSafetyCheck(emergencyId);
-      setSafetyCheck(res.data);
+      setSafetyCheck(normalizeSafetyCheck(res.data));
     } catch (err) {
       console.error("Failed to fetch safety check", err);
+      setSafetyCheck(null);
     } finally {
       setSafetyLoading(false);
     }
@@ -63,9 +100,10 @@ export default function EmergencyPage() {
     setHistoryLoading(true);
     try {
       const res = await emergencyAPI.getHistory();
-      setEmergencyHistory(res.data || []);
+      setEmergencyHistory(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.error("Failed to fetch emergency history", err);
+      setEmergencyHistory([]);
     } finally {
       setHistoryLoading(false);
     }
@@ -83,8 +121,9 @@ export default function EmergencyPage() {
     try {
       await emergencyAPI.trigger({ emergency_type: 'FACTORY_EVACUATION', notes: 'Triggered via Admin Console' });
       fetchActive();
+      ui.success('Emergency mode activated successfully.');
     } catch (err) {
-      alert(err.response?.data?.detail || "Failed to trigger emergency");
+      ui.error(err.response?.data?.detail || 'Failed to trigger emergency');
     }
   };
 
@@ -95,8 +134,9 @@ export default function EmergencyPage() {
       await emergencyAPI.resolve(activeEmergency.emergency_id);
       setActiveEmergency(null);
       setSafetyCheck(null);
+      ui.success('Emergency resolved successfully.');
     } catch (err) {
-      alert("Failed to resolve emergency");
+      ui.error('Failed to resolve emergency');
     }
   };
 
@@ -123,7 +163,7 @@ export default function EmergencyPage() {
       // Refresh emergency to get updated safety_check_sent flag
       await fetchActive();
     } catch (err) {
-      alert(err.response?.data?.detail || "Failed to send safety check");
+      ui.error(err.response?.data?.detail || 'Failed to send safety check');
     } finally {
       setSendingCheck(false);
     }
@@ -152,7 +192,7 @@ export default function EmergencyPage() {
       await emergencyAPI.respondSafetyCheck(response);
       setSelfResponded(true);
     } catch (err) {
-      alert(err.response?.data?.detail || 'Failed to submit your safety response');
+      ui.error(err.response?.data?.detail || 'Failed to submit your safety response');
     } finally {
       setSelfRespondingLoading(false);
     }
@@ -375,26 +415,28 @@ export default function EmergencyPage() {
 
               {/* Employee Response Table */}
               <div className="table-wrapper">
-                <table className="premium-table">
-                  <thead>
-                    <tr>
-                      <th>Employee Name</th>
-                      <th>Department</th>
-                      <th>Email</th>
-                      <th>Phone</th>
-                      <th>Status</th>
-                      <th>Response Time</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredResponses.length === 0 ? (
+                {safetyLoading ? (
+                  <TableSkeleton rows={6} columns={6} label="Loading safety responses..." />
+                ) : filteredResponses.length === 0 ? (
+                  <EmptyStateStandard
+                    icon="group_off"
+                    title="No responses in this category"
+                    message="Adjust filters to view other employee safety statuses."
+                  />
+                ) : (
+                  <table className="premium-table">
+                    <thead>
                       <tr>
-                        <td colSpan="6" style={{ textAlign: 'center', padding: '2rem', color: 'var(--secondary)' }}>
-                          No employees in this category
-                        </td>
+                        <th>Employee Name</th>
+                        <th>Department</th>
+                        <th>Email</th>
+                        <th>Phone</th>
+                        <th>Status</th>
+                        <th>Response Time</th>
                       </tr>
-                    ) : (
-                      filteredResponses.map(resp => (
+                    </thead>
+                    <tbody>
+                      {filteredResponses.map(resp => (
                         <tr
                           key={resp.id}
                           className={
@@ -426,10 +468,10 @@ export default function EmergencyPage() {
                             </span>
                           </td>
                         </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
               </div>
             </div>
           )}

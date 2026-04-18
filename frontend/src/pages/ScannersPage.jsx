@@ -1,11 +1,15 @@
 import { useState, useEffect } from 'react';
 import { hardwareAPI } from '../services/api';
+import { useUIFeedback } from '../context/UIFeedbackContext';
+import { TableSkeleton, EmptyStateStandard, ErrorStateStandard } from '../components/DataStates';
 
 export default function ScannersPage() {
+  const ui = useUIFeedback();
   const [scanners, setScanners] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newApiKey, setNewApiKey] = useState(null);
+  const [pageError, setPageError] = useState('');
 
   const [formData, setFormData] = useState({
     name: '',
@@ -17,10 +21,15 @@ export default function ScannersPage() {
   const fetchData = async () => {
     try {
       setLoading(true);
+      setPageError('');
       const res = await hardwareAPI.list();
-      setScanners(res.data);
+      setScanners(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.error("Failed to fetch scanners", err);
+      const detail = err.response?.data?.detail || 'Failed to fetch scanners';
+      setPageError(detail);
+      ui.error(detail);
+      setScanners([]);
     } finally {
       setLoading(false);
     }
@@ -41,7 +50,7 @@ export default function ScannersPage() {
       setFormData({ name: '', door_name: '', location_description: '', heartbeat_interval_sec: 60 });
       fetchData();
     } catch (err) {
-      alert(err.response?.data?.detail || 'Failed to register scanner');
+      ui.error(err.response?.data?.detail || 'Failed to register scanner');
     }
   };
 
@@ -58,6 +67,8 @@ export default function ScannersPage() {
           <p className="page-subtitle-premium">Manage deployed biometric scanners and connection statuses</p>
         </div>
       </header>
+
+      {pageError && <ErrorStateStandard message={pageError} onRetry={fetchData} />}
 
       {/* Stats Row */}
       <div className="stats-row">
@@ -92,10 +103,13 @@ export default function ScannersPage() {
         </div>
 
         {loading && scanners.length === 0 ? (
-          <div className="table-loading">
-            <div className="loading-spinner"></div>
-            <span>Loading scanner fleet...</span>
-          </div>
+          <TableSkeleton rows={6} columns={6} label="Loading scanner fleet..." />
+        ) : scanners.length === 0 ? (
+          <EmptyStateStandard
+            icon="router"
+            title="No scanners registered"
+            message="Register a scanner to start ingesting scan events."
+          />
         ) : (
           <div className="table-wrapper">
             <table className="premium-table">
@@ -110,48 +124,38 @@ export default function ScannersPage() {
                 </tr>
               </thead>
               <tbody>
-                {scanners.length === 0 ? (
-                  <tr>
-                    <td colSpan="6" className="table-empty">
-                      <span className="material-symbols-outlined">router</span>
-                      <p>No hardware nodes registered</p>
-                      <span className="table-empty-hint">Click + to register a new scanner</span>
-                    </td>
-                  </tr>
-                ) : (
-                  scanners.map(s => {
-                    const isOnline = s.status === 'ONLINE';
-                    return (
-                      <tr key={s.scanner_id}>
-                        <td>
-                          <div className="scanner-status">
-                            <span className={`scanner-status-dot ${isOnline ? 'scanner-status-dot--online' : 'scanner-status-dot--offline'}`}></span>
-                            <span className={`scanner-status-text ${isOnline ? 'scanner-status-text--online' : 'scanner-status-text--offline'}`}>
-                              {s.status}
-                            </span>
-                          </div>
-                        </td>
-                        <td>
-                          <span className="table-cell-name">{s.name}</span>
-                        </td>
-                        <td>
-                          <span className="table-cell-primary">{s.door_name}</span>
-                        </td>
-                        <td>
-                          <span className="table-cell-secondary">{s.location_description || '—'}</span>
-                        </td>
-                        <td>
-                          <span className="table-cell-time">
-                            {s.last_heartbeat ? new Date(s.last_heartbeat).toLocaleString() : 'Never'}
+                {scanners.map(s => {
+                  const isOnline = s.status === 'ONLINE';
+                  return (
+                    <tr key={s.scanner_id}>
+                      <td>
+                        <div className="scanner-status">
+                          <span className={`scanner-status-dot ${isOnline ? 'scanner-status-dot--online' : 'scanner-status-dot--offline'}`}></span>
+                          <span className={`scanner-status-text ${isOnline ? 'scanner-status-text--online' : 'scanner-status-text--offline'}`}>
+                            {s.status}
                           </span>
-                        </td>
-                        <td>
-                          <code className="uuid-code">{s.scanner_id.split('-')[0]}...</code>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
+                        </div>
+                      </td>
+                      <td>
+                        <span className="table-cell-name">{s.name}</span>
+                      </td>
+                      <td>
+                        <span className="table-cell-primary">{s.door_name}</span>
+                      </td>
+                      <td>
+                        <span className="table-cell-secondary">{s.location_description || '—'}</span>
+                      </td>
+                      <td>
+                        <span className="table-cell-time">
+                          {s.last_heartbeat ? new Date(s.last_heartbeat).toLocaleString() : 'Never'}
+                        </span>
+                      </td>
+                      <td>
+                        <code className="uuid-code">{s.scanner_id.split('-')[0]}...</code>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

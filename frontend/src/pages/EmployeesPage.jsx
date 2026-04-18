@@ -5,11 +5,27 @@
  */
 import { useState, useEffect } from 'react';
 import { employeeAPI, departmentAPI } from '../services/api';
+import { useUIFeedback } from '../context/UIFeedbackContext';
+import { TableSkeleton, EmptyStateStandard, ErrorStateStandard } from '../components/DataStates';
+
+function normalizeSriLankanPhone(phone) {
+  if (!phone) return '';
+  const cleaned = phone.replace(/[\s-]/g, '');
+  if (/^0\d{9}$/.test(cleaned)) {
+    return `+94${cleaned.slice(1)}`;
+  }
+  if (/^\+94\d{9}$/.test(cleaned)) {
+    return cleaned;
+  }
+  return null;
+}
 
 export default function EmployeesPage() {
+  const ui = useUIFeedback();
   const [employees, setEmployees] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [pageError, setPageError] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
@@ -33,21 +49,28 @@ export default function EmployeesPage() {
   const initialForm = {
     first_name: '', last_name: '', email: '', phone: '',
     department_id: '', fingerprint_id: '', role_name: 'EMPLOYEE',
+    managed_department_id: '',
     job_title: '', password: ''
   };
   const [formData, setFormData] = useState(initialForm);
 
+  const shortId = (id) => (id ? String(id).slice(0, 8).toUpperCase() : 'N/A');
+
   const fetchData = async () => {
     try {
       setLoading(true);
+      setPageError('');
       const [empRes, deptRes] = await Promise.all([
         employeeAPI.list(),
         departmentAPI.list()
       ]);
-      setEmployees(empRes.data);
-      setDepartments(deptRes.data);
+      setEmployees(Array.isArray(empRes.data) ? empRes.data : []);
+      setDepartments(Array.isArray(deptRes.data) ? deptRes.data : []);
     } catch (err) {
       console.error("Failed to fetch data", err);
+      const detail = err.response?.data?.detail || 'Failed to load employees and departments.';
+      setPageError(detail);
+      ui.error(detail);
     } finally {
       setLoading(false);
     }
@@ -62,9 +85,34 @@ export default function EmployeesPage() {
     setError('');
     
     const submitData = { ...formData };
+
+    if (submitData.phone) {
+      const normalizedPhone = normalizeSriLankanPhone(submitData.phone);
+      if (!normalizedPhone) {
+        setError('Phone must be 10 digits starting with 0, or +94 followed by 9 digits');
+        return;
+      }
+      submitData.phone = normalizedPhone;
+    }
+
+    if (submitData.role_name === 'MANAGER') {
+      if (!submitData.managed_department_id) {
+        setError('Please select the managed department for Department Manager role');
+        return;
+      }
+      submitData.department_id = submitData.managed_department_id;
+    } else {
+      delete submitData.managed_department_id;
+    }
+
+    if (submitData.role_name === 'HR_MANAGER') {
+      submitData.job_title = '';
+    }
+
     if (!submitData.department_id) delete submitData.department_id;
     if (!submitData.phone) delete submitData.phone;
     if (!submitData.fingerprint_id) delete submitData.fingerprint_id;
+    if (!submitData.job_title) delete submitData.job_title;
 
     try {
       await employeeAPI.create(submitData);
@@ -125,9 +173,20 @@ export default function EmployeesPage() {
   const handleUpdateEmployee = async (e) => {
     e.preventDefault();
     setEditError('');
+
+    const payload = { ...editFormData };
+    if (payload.phone) {
+      const normalizedPhone = normalizeSriLankanPhone(payload.phone);
+      if (!normalizedPhone) {
+        setEditError('Phone must be 10 digits starting with 0, or +94 followed by 9 digits');
+        return;
+      }
+      payload.phone = normalizedPhone;
+    }
+    if (!payload.phone) delete payload.phone;
     
     try {
-      await employeeAPI.update(selectedEmployee.employee_id, editFormData);
+      await employeeAPI.update(selectedEmployee.employee_id, payload);
       setIsDetailModalOpen(false);
       setIsEditing(false);
       fetchData();
@@ -183,6 +242,8 @@ export default function EmployeesPage() {
           </button>
         </div>
       </div>
+
+      {pageError && <ErrorStateStandard message={pageError} onRetry={fetchData} />}
 
       {/* Filter Panel */}
       {showFilters && (
@@ -245,10 +306,15 @@ export default function EmployeesPage() {
       {/* Data Table */}
       <div className="directory-table-container">
         {loading ? (
-          <div className="directory-loading">
-            <div className="directory-loading-spinner" />
-            <span>Loading personnel data...</span>
-          </div>
+          <TableSkeleton rows={10} columns={5} label="Loading personnel data..." />
+        ) : filteredEmployees.length === 0 ? (
+          <EmptyStateStandard
+            icon="person_off"
+            title="No personnel found"
+            message={(statusFilter || departmentFilter || searchTerm)
+              ? 'No personnel match the current search and filters.'
+              : 'Add personnel to start building the directory.'}
+          />
         ) : (
           <>
             <table className="directory-table">
@@ -262,61 +328,47 @@ export default function EmployeesPage() {
                 </tr>
               </thead>
               <tbody>
-                {paginatedEmployees.length === 0 ? (
-                  <tr>
-                    <td colSpan="5">
-                      <div className="directory-empty">
-                        <span className="material-symbols-outlined">person_off</span>
-                        <span>No personnel found</span>
-                        <span className="directory-empty-hint">
-                          {(statusFilter || departmentFilter) ? 'Try adjusting your filters' : 'Click "Add Personnel" to register your first entry'}
-                        </span>
-                      </div>
-                    </td>
-                  </tr>
-                ) : (
-                  paginatedEmployees.map(emp => {
-                    const statusConfig = getStatusConfig(emp.current_status);
-                    const isActive = emp.current_status === 'ACTIVE';
-                    return (
-                      <tr key={emp.employee_id} className={!isActive ? 'directory-row--inactive' : ''}>
-                        <td>
-                          <div className="directory-person">
-                            <div className={`directory-person-avatar ${!isActive ? 'directory-person-avatar--inactive' : ''}`}>
-                              {emp.first_name?.charAt(0)}{emp.last_name?.charAt(0)}
-                              <span className={`directory-person-indicator ${statusConfig.class}`} />
-                            </div>
-                            <div className="directory-person-info">
-                              <span className="directory-person-name">{emp.first_name} {emp.last_name}</span>
-                              <span className="directory-person-id">UNIT ID: {emp.employee_id?.slice(0,8).toUpperCase() || 'N/A'}</span>
-                            </div>
+                {paginatedEmployees.map(emp => {
+                  const statusConfig = getStatusConfig(emp.current_status);
+                  const isActive = emp.current_status === 'ACTIVE';
+                  return (
+                    <tr key={emp.employee_id} className={!isActive ? 'directory-row--inactive' : ''}>
+                      <td>
+                        <div className="directory-person">
+                          <div className={`directory-person-avatar ${!isActive ? 'directory-person-avatar--inactive' : ''}`}>
+                            {emp.first_name?.charAt(0)}{emp.last_name?.charAt(0)}
+                            <span className={`directory-person-indicator ${statusConfig.class}`} />
                           </div>
-                        </td>
-                        <td>
-                          <span className="directory-department">{emp.department_name || '—'}</span>
-                        </td>
-                        <td>
-                          <span className={`directory-status ${statusConfig.class}`}>
-                            {isActive && <span className="directory-status-ping" />}
-                            {statusConfig.label}
-                          </span>
-                        </td>
-                        <td>
-                          <span className="directory-location">{isActive ? 'HQ Secure-1' : 'Offline'}</span>
-                        </td>
-                        <td>
-                          <button 
-                            className="directory-action-btn"
-                            onClick={() => handleViewEmployee(emp)}
-                            title="View Details"
-                          >
-                            <span className="material-symbols-outlined">visibility</span>
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
+                          <div className="directory-person-info">
+                            <span className="directory-person-name">{emp.first_name} {emp.last_name}</span>
+                            <span className="directory-person-id">UNIT ID: {shortId(emp.employee_id)}</span>
+                          </div>
+                        </div>
+                      </td>
+                      <td>
+                        <span className="directory-department">{emp.department_name || '—'}</span>
+                      </td>
+                      <td>
+                        <span className={`directory-status ${statusConfig.class}`}>
+                          {isActive && <span className="directory-status-ping" />}
+                          {statusConfig.label}
+                        </span>
+                      </td>
+                      <td>
+                        <span className="directory-location">{isActive ? 'HQ Secure-1' : 'Offline'}</span>
+                      </td>
+                      <td>
+                        <button
+                          className="directory-action-btn"
+                          onClick={() => handleViewEmployee(emp)}
+                          title="View Details"
+                        >
+                          <span className="material-symbols-outlined">visibility</span>
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
             
@@ -437,31 +489,27 @@ export default function EmployeesPage() {
                     className="modal-input" 
                     value={formData.phone} 
                     onChange={e => setFormData({...formData, phone: e.target.value})} 
-                    placeholder="+1 (555) 000-0000"
+                    placeholder="0XXXXXXXXX or +94XXXXXXXXX"
                   />
                 </div>
               </div>
 
               <div className="modal-form-grid">
                 <div className="modal-field">
-                  <label className="modal-label">Department</label>
-                  <select 
-                    className="modal-input" 
-                    value={formData.department_id} 
-                    onChange={e => setFormData({...formData, department_id: e.target.value})}
-                  >
-                    <option value="">Select department</option>
-                    {departments.map(d => (
-                      <option key={d.department_id} value={d.department_id}>{d.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="modal-field">
                   <label className="modal-label">Role</label>
                   <select 
                     className="modal-input" 
                     value={formData.role_name} 
-                    onChange={e => setFormData({...formData, role_name: e.target.value})}
+                    onChange={e => {
+                      const nextRole = e.target.value;
+                      setFormData(prev => ({
+                        ...prev,
+                        role_name: nextRole,
+                        job_title: nextRole === 'HR_MANAGER' ? '' : prev.job_title,
+                        department_id: nextRole === 'MANAGER' ? '' : prev.department_id,
+                        managed_department_id: nextRole === 'MANAGER' ? prev.managed_department_id : '',
+                      }));
+                    }}
                   >
                     <option value="EMPLOYEE">Employee</option>
                     <option value="MANAGER">Department Manager</option>
@@ -469,7 +517,46 @@ export default function EmployeesPage() {
                     <option value="SUPER_ADMIN">Super Admin</option>
                   </select>
                 </div>
+
+                {formData.role_name !== 'MANAGER' && (
+                  <div className="modal-field">
+                    <label className="modal-label">Department</label>
+                    <select 
+                      className="modal-input" 
+                      value={formData.department_id} 
+                      onChange={e => setFormData({...formData, department_id: e.target.value})}
+                    >
+                      <option value="">Select department</option>
+                      {departments.map(d => (
+                        <option key={d.department_id} value={d.department_id}>{d.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
+
+              {formData.role_name === 'MANAGER' && (
+                <div className="modal-form-grid">
+                  <div className="modal-field">
+                    <label className="modal-label">Managed Department</label>
+                    <select
+                      className="modal-input"
+                      required
+                      value={formData.managed_department_id}
+                      onChange={e => setFormData({ 
+                        ...formData, 
+                        managed_department_id: e.target.value,
+                        department_id: e.target.value,
+                      })}
+                    >
+                      <option value="">Select managed department</option>
+                      {departments.map(d => (
+                        <option key={d.department_id} value={d.department_id}>{d.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
 
               <div className="modal-form-grid">
                 <div className="modal-field">
@@ -496,18 +583,20 @@ export default function EmployeesPage() {
                 </div>
               </div>
 
-              <div className="modal-form-grid">
-                <div className="modal-field">
-                  <label className="modal-label">Job Title</label>
-                  <input 
-                    type="text" 
-                    className="modal-input" 
-                    value={formData.job_title} 
-                    onChange={e => setFormData({...formData, job_title: e.target.value})} 
-                    placeholder="e.g. Software Engineer, QA Lead"
-                  />
+              {formData.role_name !== 'HR_MANAGER' && (
+                <div className="modal-form-grid">
+                  <div className="modal-field">
+                    <label className="modal-label">Job Title</label>
+                    <input 
+                      type="text" 
+                      className="modal-input" 
+                      value={formData.job_title} 
+                      onChange={e => setFormData({...formData, job_title: e.target.value})} 
+                      placeholder="e.g. Software Engineer, QA Lead"
+                    />
+                  </div>
                 </div>
-              </div>
+              )}
 
 
               <div className="modal-actions">
@@ -535,7 +624,7 @@ export default function EmployeesPage() {
                 </span>
                 <div>
                   <h2 className="modal-title">{isEditing ? 'Edit Personnel' : 'Personnel Details'}</h2>
-                  <p className="modal-subtitle">Unit ID: {selectedEmployee.employee_id?.slice(0,8).toUpperCase()}</p>
+                  <p className="modal-subtitle">Unit ID: {shortId(selectedEmployee.employee_id)}</p>
                 </div>
               </div>
               <button className="modal-close" onClick={() => { setIsDetailModalOpen(false); setIsEditing(false); }}>
@@ -583,6 +672,7 @@ export default function EmployeesPage() {
                       className="modal-input" 
                       value={editFormData.phone} 
                       onChange={e => setEditFormData({...editFormData, phone: e.target.value})} 
+                      placeholder="0XXXXXXXXX or +94XXXXXXXXX"
                     />
                   </div>
                   <div className="modal-field">

@@ -1,12 +1,16 @@
 import { useState, useEffect } from 'react';
 import { correctionsAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { useUIFeedback } from '../context/UIFeedbackContext';
+import { TableSkeleton, EmptyStateStandard, ErrorStateStandard } from '../components/DataStates';
 
 export default function CorrectionsPage() {
   const { user } = useAuth();
+  const ui = useUIFeedback();
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [pageError, setPageError] = useState('');
 
   const [formData, setFormData] = useState({
     correction_date: '',
@@ -18,10 +22,15 @@ export default function CorrectionsPage() {
   const fetchData = async () => {
     try {
       setLoading(true);
+      setPageError('');
       const res = await correctionsAPI.list();
-      setRequests(res.data);
+      setRequests(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.error("Failed to fetch data", err);
+      const detail = err.response?.data?.detail || 'Failed to load correction requests.';
+      setPageError(detail);
+      ui.error(detail);
+      setRequests([]);
     } finally {
       setLoading(false);
     }
@@ -43,7 +52,7 @@ export default function CorrectionsPage() {
       setFormData({ correction_date: '', correction_type: 'MISSED_SCAN', proposed_time: '', reason: '' });
       fetchData();
     } catch (err) {
-      alert(err.response?.data?.detail || 'Failed to submit correction');
+      ui.error(err.response?.data?.detail || 'Failed to submit correction');
     }
   };
 
@@ -52,7 +61,7 @@ export default function CorrectionsPage() {
       await correctionsAPI.updateStatus(id, status, `HR marked as ${status}`);
       fetchData();
     } catch (err) {
-      alert(err.response?.data?.detail || 'Failed to update correction');
+      ui.error(err.response?.data?.detail || 'Failed to update correction');
     }
   };
 
@@ -70,6 +79,8 @@ export default function CorrectionsPage() {
           <p className="page-subtitle-premium">Dispute attendance records and log missed biometric scans</p>
         </div>
       </header>
+
+      {pageError && <ErrorStateStandard message={pageError} onRetry={fetchData} />}
 
       {/* Stats Row */}
       <div className="stats-row">
@@ -104,10 +115,13 @@ export default function CorrectionsPage() {
         </div>
 
         {loading ? (
-          <div className="table-loading">
-            <div className="loading-spinner"></div>
-            <span>Loading correction requests...</span>
-          </div>
+          <TableSkeleton rows={6} columns={isHR ? 6 : 5} label="Loading correction requests..." />
+        ) : requests.length === 0 ? (
+          <EmptyStateStandard
+            icon="fact_check"
+            title="No correction requests"
+            message="Submitted correction requests will appear here."
+          />
         ) : (
           <div className="table-wrapper">
             <table className="premium-table">
@@ -122,75 +136,66 @@ export default function CorrectionsPage() {
                 </tr>
               </thead>
               <tbody>
-                {requests.length === 0 ? (
-                  <tr>
-                    <td colSpan={isHR ? 6 : 5} className="table-empty">
-                      <span className="material-symbols-outlined">fact_check</span>
-                      <p>No correction requests found</p>
+                {requests.map(req => (
+                  <tr key={req.request_id}>
+                    {isHR && (
+                      <td>
+                        <span className="table-cell-name">{req.employee_name}</span>
+                      </td>
+                    )}
+                    <td>
+                      <span className="table-cell-date">{req.correction_date}</span>
                     </td>
+                    <td>
+                      <span className="correction-type-chip">
+                        {req.correction_type.replace('_', ' ')}
+                      </span>
+                    </td>
+                    <td>
+                      <span className="table-cell-time">
+                        {new Date(req.proposed_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </td>
+                    <td>
+                      <div className="status-with-reason">
+                        <span className={`status-chip ${
+                          req.status === 'APPROVED' ? 'status-chip--active' :
+                          req.status === 'REJECTED' ? 'status-chip--danger' :
+                          'status-chip--warning'
+                        }`}>
+                          {req.status}
+                        </span>
+                        {req.reason && (
+                          <span className="status-reason">{req.reason}</span>
+                        )}
+                      </div>
+                    </td>
+                    {isHR && (
+                      <td>
+                        {req.status === 'PENDING' ? (
+                          <div className="action-buttons">
+                            <button
+                              className="action-btn action-btn--approve"
+                              onClick={() => handleStatusUpdate(req.request_id, 'APPROVED')}
+                              title="Approve"
+                            >
+                              <span className="material-symbols-outlined">check</span>
+                            </button>
+                            <button
+                              className="action-btn action-btn--reject"
+                              onClick={() => handleStatusUpdate(req.request_id, 'REJECTED')}
+                              title="Reject"
+                            >
+                              <span className="material-symbols-outlined">close</span>
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="table-cell-secondary">Resolved</span>
+                        )}
+                      </td>
+                    )}
                   </tr>
-                ) : (
-                  requests.map(req => (
-                    <tr key={req.request_id}>
-                      {isHR && (
-                        <td>
-                          <span className="table-cell-name">{req.employee_name}</span>
-                        </td>
-                      )}
-                      <td>
-                        <span className="table-cell-date">{req.correction_date}</span>
-                      </td>
-                      <td>
-                        <span className="correction-type-chip">
-                          {req.correction_type.replace('_', ' ')}
-                        </span>
-                      </td>
-                      <td>
-                        <span className="table-cell-time">
-                          {new Date(req.proposed_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                      </td>
-                      <td>
-                        <div className="status-with-reason">
-                          <span className={`status-chip ${
-                            req.status === 'APPROVED' ? 'status-chip--active' :
-                            req.status === 'REJECTED' ? 'status-chip--danger' :
-                            'status-chip--warning'
-                          }`}>
-                            {req.status}
-                          </span>
-                          {req.reason && (
-                            <span className="status-reason">{req.reason}</span>
-                          )}
-                        </div>
-                      </td>
-                      {isHR && (
-                        <td>
-                          {req.status === 'PENDING' ? (
-                            <div className="action-buttons">
-                              <button
-                                className="action-btn action-btn--approve"
-                                onClick={() => handleStatusUpdate(req.request_id, 'APPROVED')}
-                                title="Approve"
-                              >
-                                <span className="material-symbols-outlined">check</span>
-                              </button>
-                              <button
-                                className="action-btn action-btn--reject"
-                                onClick={() => handleStatusUpdate(req.request_id, 'REJECTED')}
-                                title="Reject"
-                              >
-                                <span className="material-symbols-outlined">close</span>
-                              </button>
-                            </div>
-                          ) : (
-                            <span className="table-cell-secondary">Resolved</span>
-                          )}
-                        </td>
-                      )}
-                    </tr>
-                  ))
-                )}
+                ))}
               </tbody>
             </table>
           </div>

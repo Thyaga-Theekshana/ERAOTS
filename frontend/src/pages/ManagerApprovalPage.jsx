@@ -1,10 +1,14 @@
 import { useState, useEffect } from 'react';
 import { correctionsAPI } from '../services/api';
+import { useUIFeedback } from '../context/UIFeedbackContext';
+import { TableSkeleton, EmptyStateStandard, ErrorStateStandard } from '../components/DataStates';
 
 export default function ManagerApprovalPage() {
+  const ui = useUIFeedback();
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [comment, setComment] = useState({});
+  const [pageError, setPageError] = useState('');
 
   useEffect(() => {
     fetchRequests();
@@ -14,9 +18,14 @@ export default function ManagerApprovalPage() {
     setLoading(true);
     try {
       const res = await correctionsAPI.list('PENDING');
-      setRequests(res.data);
+      setPageError('');
+      setRequests(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.error('Failed to fetch requests', err);
+      const detail = err.response?.data?.detail || 'Failed to fetch manager approval requests';
+      setPageError(detail);
+      ui.error(detail);
+      setRequests([]);
     } finally {
       setLoading(false);
     }
@@ -27,20 +36,20 @@ export default function ManagerApprovalPage() {
       await correctionsAPI.managerApprove(id, comment[id] || '');
       fetchRequests();
     } catch (err) {
-      alert('Failed to approve');
+      ui.error(err.response?.data?.detail || 'Failed to approve');
     }
   };
 
   const handleReject = async (id) => {
     if (!comment[id]) {
-      alert('Reason is required for rejection');
+      ui.warning('Reason is required for rejection');
       return;
     }
     try {
       await correctionsAPI.managerReject(id, comment[id]);
       fetchRequests();
     } catch (err) {
-      alert('Failed to reject');
+      ui.error(err.response?.data?.detail || 'Failed to reject');
     }
   };
 
@@ -54,17 +63,18 @@ export default function ManagerApprovalPage() {
         </div>
       </header>
 
+      {pageError && <ErrorStateStandard message={pageError} onRetry={fetchRequests} />}
+
       <div className="bento-grid">
         <div className="card glass bento-span-full">
           {loading ? (
-            <div className="table-loading">
-              <div className="loading-spinner"></div>
-            </div>
+            <TableSkeleton rows={6} columns={7} label="Loading manager approval requests..." />
           ) : requests.length === 0 ? (
-            <div className="empty-state">
-              <span className="material-symbols-outlined">done_all</span>
-              <p>No pending correction requests for your team.</p>
-            </div>
+            <EmptyStateStandard
+              icon="done_all"
+              title="No pending team corrections"
+              message="Pending correction requests from your team will appear here."
+            />
           ) : (
             <table className="data-table">
               <thead>

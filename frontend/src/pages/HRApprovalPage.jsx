@@ -1,10 +1,14 @@
 import { useState, useEffect } from 'react';
 import { correctionsAPI } from '../services/api';
+import { useUIFeedback } from '../context/UIFeedbackContext';
+import { TableSkeleton, EmptyStateStandard, ErrorStateStandard } from '../components/DataStates';
 
 export default function HRApprovalPage() {
+  const ui = useUIFeedback();
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [comment, setComment] = useState({});
+  const [pageError, setPageError] = useState('');
 
   useEffect(() => {
     fetchRequests();
@@ -14,9 +18,14 @@ export default function HRApprovalPage() {
     setLoading(true);
     try {
       const res = await correctionsAPI.list('MANAGER_APPROVED');
-      setRequests(res.data);
+      setPageError('');
+      setRequests(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.error('Failed to fetch requests', err);
+      const detail = err.response?.data?.detail || 'Failed to load HR approval requests';
+      setPageError(detail);
+      ui.error(detail);
+      setRequests([]);
     } finally {
       setLoading(false);
     }
@@ -27,20 +36,20 @@ export default function HRApprovalPage() {
       await correctionsAPI.hrApprove(id, comment[id] || '');
       fetchRequests();
     } catch (err) {
-      alert('Failed to approve');
+      ui.error(err.response?.data?.detail || 'Failed to approve');
     }
   };
 
   const handleReject = async (id) => {
     if (!comment[id]) {
-      alert('Reason is required for rejection');
+      ui.warning('Reason is required for rejection');
       return;
     }
     try {
       await correctionsAPI.hrReject(id, comment[id]);
       fetchRequests();
     } catch (err) {
-      alert('Failed to reject');
+      ui.error(err.response?.data?.detail || 'Failed to reject');
     }
   };
 
@@ -54,17 +63,18 @@ export default function HRApprovalPage() {
         </div>
       </header>
 
+      {pageError && <ErrorStateStandard message={pageError} onRetry={fetchRequests} />}
+
       <div className="bento-grid">
         <div className="card glass bento-span-full">
           {loading ? (
-            <div className="table-loading">
-              <div className="loading-spinner"></div>
-            </div>
+            <TableSkeleton rows={6} columns={7} label="Loading HR approval requests..." />
           ) : requests.length === 0 ? (
-            <div className="empty-state">
-              <span className="material-symbols-outlined">done_all</span>
-              <p>No manager-approved requests waiting for HR review.</p>
-            </div>
+            <EmptyStateStandard
+              icon="done_all"
+              title="No requests awaiting HR review"
+              message="Manager-approved requests will appear here for final review."
+            />
           ) : (
             <table className="data-table">
               <thead>

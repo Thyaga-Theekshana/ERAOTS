@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import { attendanceAPI, reportsAPI, downloadBlob } from '../services/api';
+import { useUIFeedback } from '../context/UIFeedbackContext';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   LineChart, Line
 } from 'recharts';
 
 export default function AnalyticsPage() {
+  const ui = useUIFeedback();
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
@@ -84,7 +86,7 @@ export default function AnalyticsPage() {
       setShowExportModal(false);
     } catch (err) {
       console.error("Export failed:", err);
-      alert("Failed to export report. Please try again.");
+      ui.error('Failed to export report. Please try again.');
     } finally {
       setExporting(false);
     }

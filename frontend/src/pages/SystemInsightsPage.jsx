@@ -8,6 +8,23 @@
  */
 import { useState, useEffect, useCallback } from "react";
 import { systemAPI } from "../services/api";
+import { useUIFeedback } from '../context/UIFeedbackContext';
+
+const isPlainObject = (value) => value && typeof value === 'object' && !Array.isArray(value);
+
+const normalizeSystemInsights = (payload) => {
+  if (!isPlainObject(payload)) {
+    return null;
+  }
+
+  return {
+    ...payload,
+    data_quality: isPlainObject(payload.data_quality) ? payload.data_quality : null,
+    hardware_health: isPlainObject(payload.hardware_health) ? payload.hardware_health : null,
+    security_alerts: Array.isArray(payload.security_alerts) ? payload.security_alerts : [],
+    audit_feed: Array.isArray(payload.audit_feed) ? payload.audit_feed : [],
+  };
+};
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -559,6 +576,7 @@ function SecurityAuditPanel({ alerts, auditFeed }) {
 
 // ─── Main Page ───────────────────────────────────────────────────────────────
 export default function SystemInsightsPage() {
+  const ui = useUIFeedback();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -569,10 +587,16 @@ export default function SystemInsightsPage() {
       setLoading(true);
       setError(null);
       const res = await systemAPI.insights(timeRange);
-      setData(res.data);
+      const normalized = normalizeSystemInsights(res.data);
+      if (!normalized) {
+        throw new Error('Unexpected system insights response');
+      }
+      setData(normalized);
     } catch (err) {
       console.error("Failed to load system insights:", err);
       setError("Unable to load system insights. Please try again.");
+      ui.error(err.response?.data?.detail || 'Unable to load system insights. Please try again.');
+      setData(null);
     } finally {
       setLoading(false);
     }

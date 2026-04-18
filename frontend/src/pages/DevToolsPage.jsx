@@ -4,8 +4,11 @@
  */
 import { useState, useEffect } from 'react';
 import { settingsAPI, employeeAPI, departmentAPI } from '../services/api';
+import { useUIFeedback } from '../context/UIFeedbackContext';
+import { TableSkeleton, ErrorStateStandard } from '../components/DataStates';
 
 export default function DevToolsPage() {
+  const ui = useUIFeedback();
   const [activeTab, setActiveTab] = useState('overview');
   const [systemInfo, setSystemInfo] = useState({
     version: '1.0.0',
@@ -19,6 +22,7 @@ export default function DevToolsPage() {
   const [logs, setLogs] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [pageError, setPageError] = useState('');
   const [testResult, setTestResult] = useState(null);
   const [activeModal, setActiveModal] = useState(null);
 
@@ -29,6 +33,7 @@ export default function DevToolsPage() {
   const fetchData = async () => {
     setLoading(true);
     try {
+      setPageError('');
       // Fetch real system info
       const [empRes, deptRes] = await Promise.all([
         employeeAPI.list({ limit: 1000 }),
@@ -61,6 +66,9 @@ export default function DevToolsPage() {
       ]);
     } catch (err) {
       console.error('Failed to fetch dev data:', err);
+      const detail = err.response?.data?.detail || 'Failed to load developer tools data.';
+      setPageError(detail);
+      ui.error(detail);
     } finally {
       setLoading(false);
     }
@@ -142,6 +150,8 @@ export default function DevToolsPage() {
         </div>
       </header>
 
+      {pageError && <ErrorStateStandard message={pageError} onRetry={fetchData} />}
+
       {/* Tab Navigation */}
       <div className="dev-tabs">
         <button 
@@ -176,10 +186,7 @@ export default function DevToolsPage() {
 
       {/* Tab Content */}
       {loading ? (
-        <div className="table-loading">
-          <div className="loading-spinner"></div>
-          <span>Loading...</span>
-        </div>
+        <TableSkeleton rows={8} columns={4} label="Loading developer diagnostics..." />
       ) : (
         <>
           {/* Overview Tab */}
@@ -422,7 +429,7 @@ export default function DevToolsPage() {
               {activeModal === 'backup' && (
                 <div className="tool-panel">
                   <div className="tool-actions">
-                    <button className="btn-primary" onClick={() => alert('Backup creation is available in production.')}>
+                    <button className="btn-primary" onClick={() => ui.info('Backup creation is available in production.')}>
                       <span className="material-symbols-outlined">add</span>
                       Create Backup
                     </button>

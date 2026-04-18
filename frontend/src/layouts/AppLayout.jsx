@@ -19,82 +19,74 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { employeeAPI, departmentAPI } from '../services/api';
 import NotificationBell from '../components/notifications/NotificationBell';
+import BrandLogo from '../components/BrandLogo';
 
 // ─── Navigation definitions ────────────────────────────────────────────────
 
 const NAV_SUPER_ADMIN = [
-  { to: '/',                label: 'Live Overview',   icon: 'pulse_alert' },
-  { to: '/my-schedule',     label: 'My Schedule',     icon: 'calendar_month' },
-  { to: '/scanners',        label: 'Scanners',        icon: 'sensors' },
-  { to: '/hardware',        label: 'Hardware Health', icon: 'monitor_heart' },
-  { to: '/system-insights', label: 'System Insights', icon: 'shield_with_heart' },
-  { to: '/settings',        label: 'System Config',   icon: 'tune' },
-  { to: '/dev-tools',       label: 'Dev Tools',       icon: 'code' },
-  { to: '/notifications',   label: 'Alerts',          icon: 'notifications' },
-  { to: '/announcements',   label: 'Announcements',   icon: 'campaign' },
-  { to: '/admin/meetings',  label: 'Meeting Alerts',  icon: 'event' },
+  { to: '/',                label: 'Dashboard',      icon: 'pulse_alert' },
+  { to: '/directory',       label: 'Directory Hub',  icon: 'groups' },
+  { to: '/attendance-hub',  label: 'Attendance Hub', icon: 'event_available' },
+  { to: '/schedule-hub',    label: 'Schedule Hub',   icon: 'calendar_month' },
+  { to: '/corrections-hub', label: 'Corrections',    icon: 'edit_note' },
+  { to: '/insights-hub',    label: 'Insights',       icon: 'monitoring' },
+  { to: '/communications',  label: 'Comms Hub',      icon: 'notifications' },
+  { to: '/hardware',        label: 'Hardware',       icon: 'monitor_heart' },
+  { to: '/settings',        label: 'System Config',  icon: 'tune' },
+  { to: '/dev-tools',       label: 'Dev Tools',      icon: 'code' },
 ];
 
 const NAV_HR_MANAGERIAL = [
-  { to: '/',              label: 'Dashboard',       icon: 'grid_view' },
-  { to: '/my-schedule',   label: 'My Schedule',     icon: 'calendar_month' },
-  { to: '/employees',     label: 'Directory',       icon: 'groups' },
-  { to: '/departments',   label: 'Departments',     icon: 'corporate_fare' },
-  { to: '/attendance',    label: 'Attendance',      icon: 'event_available' },
-  { to: '/schedules',     label: 'Schedules',       icon: 'calendar_month' },
-  { to: '/corrections',   label: 'Corrections',     icon: 'edit_note' },
-  { to: '/analytics',     label: 'Analytics',       icon: 'monitoring' },
-  { to: '/company-insights', label: 'Company Insights', icon: 'donut_large' },
-  { to: '/emergency',     label: 'Emergency',       icon: 'emergency' },
-  { to: '/hardware',      label: 'Hardware',        icon: 'monitor_heart' },
-  { to: '/settings',      label: 'HR Policies',     icon: 'policy' },
-  { to: '/notifications', label: 'Notifications',   icon: 'notifications' },
-  { to: '/announcements', label: 'Announcements',   icon: 'campaign' },
-  { to: '/admin/meetings',label: 'Meeting Alerts',  icon: 'event' },
+  { to: '/',               label: 'Dashboard',      icon: 'grid_view' },
+  { to: '/directory',      label: 'Directory Hub',  icon: 'groups' },
+  { to: '/attendance-hub', label: 'Attendance Hub', icon: 'event_available' },
+  { to: '/schedule-hub',   label: 'Schedule Hub',   icon: 'calendar_month' },
+  { to: '/corrections-hub',label: 'Corrections',    icon: 'edit_note' },
+  { to: '/insights-hub',   label: 'Insights',       icon: 'monitoring' },
+  { to: '/communications', label: 'Comms Hub',      icon: 'notifications' },
+  { to: '/emergency',      label: 'Emergency',      icon: 'emergency' },
+  { to: '/settings',       label: 'HR Policies',    icon: 'policy' },
 ];
 
 const NAV_HR_PERSONAL = [
-  { to: '/',              label: 'Dashboard',       icon: 'grid_view' },
-  { to: '/my-profile',    label: 'My Profile',      icon: 'person' },
-  { to: '/my-attendance', label: 'My Attendance',   icon: 'event_available' },
-  { to: '/my-insights',   label: 'My Insights',     icon: 'analytics' },
-  { to: '/my-schedule',   label: 'My Schedule',     icon: 'calendar_month' },
-  { to: '/corrections',   label: 'My Corrections',  icon: 'edit_note' },
-  { to: '/notifications', label: 'Notifications',   icon: 'notifications' },
-  { to: '/announcements', label: 'Announcements',   icon: 'campaign' },
-  { to: '/settings/notifications', label: 'Notification Settings', icon: 'notifications_active' },
+  { to: '/',               label: 'Dashboard',      icon: 'grid_view' },
+  { to: '/my-profile',     label: 'My Profile',     icon: 'person' },
+  { to: '/attendance-hub', label: 'Attendance',     icon: 'event_available' },
+  { to: '/schedule-hub',   label: 'Schedule',       icon: 'calendar_month' },
+  { to: '/corrections-hub',label: 'Corrections',    icon: 'edit_note' },
+  { to: '/insights-hub',   label: 'Insights',       icon: 'analytics' },
+  { to: '/communications', label: 'Comms Hub',      icon: 'notifications' },
 ];
 
 const NAV_MANAGER_MANAGERIAL = [
-  { to: '/',                label: 'Dashboard',       icon: 'grid_view' },
-  { to: '/team',            label: 'My Team',         icon: 'group' },
-  { to: '/team-attendance', label: 'Team Attendance', icon: 'event_available' },
-  { to: '/team-schedules',  label: 'Team Schedules',  icon: 'calendar_month' },
-  { to: '/corrections',     label: 'Corrections',     icon: 'edit_note' },
-  { to: '/notifications',   label: 'Notifications',   icon: 'notifications' },
-  { to: '/announcements',   label: 'Announcements',   icon: 'campaign' },
+  { to: '/',                label: 'Dashboard',      icon: 'grid_view' },
+  { to: '/team',            label: 'My Team',        icon: 'group' },
+  { to: '/attendance-hub',  label: 'Attendance Hub', icon: 'event_available' },
+  { to: '/schedule-hub',    label: 'Schedule Hub',   icon: 'calendar_month' },
+  { to: '/corrections-hub', label: 'Corrections',    icon: 'edit_note' },
+  { to: '/insights-hub',    label: 'Insights',       icon: 'analytics' },
+  { to: '/settings',        label: 'Team Policies',  icon: 'policy' },
+  { to: '/communications',  label: 'Comms Hub',      icon: 'notifications' },
 ];
 
 const NAV_MANAGER_PERSONAL = [
-  { to: '/',              label: 'Dashboard',       icon: 'grid_view' },
-  { to: '/my-profile',    label: 'My Profile',      icon: 'person' },
-  { to: '/my-attendance', label: 'My Attendance',   icon: 'event_available' },
-  { to: '/my-insights',   label: 'My Insights',     icon: 'analytics' },
-  { to: '/my-schedule',   label: 'My Schedule',     icon: 'calendar_month' },
-  { to: '/corrections',   label: 'My Corrections',  icon: 'edit_note' },
-  { to: '/notifications', label: 'Notifications',   icon: 'notifications' },
+  { to: '/',               label: 'Dashboard',      icon: 'grid_view' },
+  { to: '/my-profile',     label: 'My Profile',     icon: 'person' },
+  { to: '/attendance-hub', label: 'Attendance',     icon: 'event_available' },
+  { to: '/schedule-hub',   label: 'Schedule',       icon: 'calendar_month' },
+  { to: '/corrections-hub',label: 'Corrections',    icon: 'edit_note' },
+  { to: '/insights-hub',   label: 'Insights',       icon: 'analytics' },
+  { to: '/communications', label: 'Comms Hub',      icon: 'notifications' },
 ];
 
 const NAV_EMPLOYEE = [
-  { to: '/',              label: 'Dashboard',       icon: 'grid_view' },
-  { to: '/my-profile',    label: 'My Profile',      icon: 'person' },
-  { to: '/my-attendance', label: 'My Attendance',   icon: 'event_available' },
-  { to: '/my-insights',   label: 'My Insights',     icon: 'analytics' },
-  { to: '/my-schedule',   label: 'My Schedule',     icon: 'calendar_month' },
-  { to: '/corrections',   label: 'My Corrections',  icon: 'edit_note' },
-  { to: '/notifications', label: 'Notifications',   icon: 'notifications' },
-  { to: '/announcements', label: 'Announcements',   icon: 'campaign' },
-  { to: '/settings/notifications', label: 'Notification Settings', icon: 'notifications_active' },
+  { to: '/',               label: 'Dashboard',      icon: 'grid_view' },
+  { to: '/my-profile',     label: 'My Profile',     icon: 'person' },
+  { to: '/attendance-hub', label: 'Attendance',     icon: 'event_available' },
+  { to: '/schedule-hub',   label: 'Schedule',       icon: 'calendar_month' },
+  { to: '/corrections-hub',label: 'Corrections',    icon: 'edit_note' },
+  { to: '/insights-hub',   label: 'Insights',       icon: 'analytics' },
+  { to: '/communications', label: 'Comms Hub',      icon: 'notifications' },
 ];
 
 function getNavItems(role, portalMode) {
@@ -231,14 +223,7 @@ export default function AppLayout() {
 
         {/* Brand */}
         <div className="sidebar-brand">
-          <div className="sidebar-brand-icon">
-            <span
-              className="material-symbols-outlined"
-              style={{ fontVariationSettings: "'FILL' 1" }}
-            >
-              pulse_alert
-            </span>
-          </div>
+          <BrandLogo variant="sidebar" />
           <div className="sidebar-brand-text">
             <span className="sidebar-brand-name">ERAOTS</span>
             <span className="sidebar-brand-tagline">{tagline}</span>

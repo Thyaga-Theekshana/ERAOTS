@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import BrandLogo from '../components/BrandLogo';
 
 // Test accounts — 4 roles, aligned with the RBAC hierarchy
 const DEMO_ACCOUNTS = [
@@ -68,14 +69,7 @@ export default function LoginPage() {
       <div className="login-card">
         {/* Brand Header */}
         <div className="login-brand">
-          <div className="login-brand-icon">
-            <span
-              className="material-symbols-outlined"
-              style={{ fontSize: '2rem', fontVariationSettings: "'FILL' 1" }}
-            >
-              pulse_alert
-            </span>
-          </div>
+          <BrandLogo variant="login" />
           <div className="login-brand-text">
             <h1 className="login-brand-name">ERAOTS</h1>
             <span className="login-brand-tagline">Vigilant Glass</span>

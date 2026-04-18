@@ -3,7 +3,7 @@ Pydantic schemas for request/response validation.
 Shared across all API endpoints.
 """
 from pydantic import BaseModel, EmailStr, Field
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import datetime, date
 from uuid import UUID
 
@@ -56,6 +56,7 @@ class EmployeeCreate(BaseModel):
     hire_date: Optional[date] = None
     job_title: Optional[str] = None  # Free-text job role
     role_name: str = "EMPLOYEE"  # SUPER_ADMIN, HR_MANAGER, MANAGER, EMPLOYEE
+    managed_department_id: Optional[UUID] = None  # Required when role_name=MANAGER
     password: str = Field(..., min_length=6)
 
 
@@ -443,15 +444,34 @@ class SafetyCheckOverview(BaseModel):
 
 
 class PolicyUpdate(BaseModel):
-    value: dict
+    value: Dict[str, Any]
+    is_active: Optional[bool] = None
+    effective_from: Optional[date] = None
+
+
+class PolicyOverrideCreate(BaseModel):
+    policy_type: str
+    department_id: Optional[UUID] = None
+    value: Optional[Dict[str, Any]] = None
+    is_active: bool = True
+    effective_from: Optional[date] = None
 
 
 class PolicyResponse(BaseModel):
     policy_id: UUID
     name: str
+    description: Optional[str] = None
     policy_type: str
-    value: dict
+    value: Dict[str, Any]
     is_active: bool
+    department_id: Optional[UUID] = None
+    department_name: Optional[str] = None
+    scope: str = "GLOBAL"  # GLOBAL | DEPARTMENT
+    domain: Optional[str] = None  # SYSTEM | WORKFORCE
+    editable: bool = False
+    min_role_to_edit: Optional[str] = None
+    effective_from: Optional[date] = None
+    updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True

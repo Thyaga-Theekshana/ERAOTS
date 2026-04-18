@@ -1,14 +1,18 @@
 import { useState, useEffect } from 'react';
 import { leaveAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { useUIFeedback } from '../context/UIFeedbackContext';
+import { TableSkeleton, EmptyStateStandard, ErrorStateStandard } from '../components/DataStates';
 
 export default function SchedulesPage({ departmentScoped = false }) {
   const { user } = useAuth();
+  const ui = useUIFeedback();
   const [requests, setRequests] = useState([]);
   const [leaveTypes, setLeaveTypes] = useState([]);
   const [usageSummary, setUsageSummary] = useState([]);
   const [calendarEntries, setCalendarEntries] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [pageError, setPageError] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activeView, setActiveView] = useState('table');
   const [calendarMonth, setCalendarMonth] = useState(() => {
@@ -35,6 +39,7 @@ export default function SchedulesPage({ departmentScoped = false }) {
   const fetchData = async () => {
     try {
       setLoading(true);
+      setPageError('');
 
       const [reqRes, typesRes, calendarRes] = await Promise.all([
         leaveAPI.listRequests(),
@@ -65,6 +70,13 @@ export default function SchedulesPage({ departmentScoped = false }) {
       }
     } catch (err) {
       console.error('Failed to fetch schedule/leave data', err);
+      const detail = err.response?.data?.detail || 'Failed to load leave schedules.';
+      setPageError(detail);
+      ui.error(detail);
+      setRequests([]);
+      setLeaveTypes([]);
+      setUsageSummary([]);
+      setCalendarEntries([]);
     } finally {
       setLoading(false);
     }
@@ -83,21 +95,21 @@ export default function SchedulesPage({ departmentScoped = false }) {
       setFormData({ ...formData, start_date: '', end_date: '', reason: '' });
       fetchData();
     } catch (err) {
-      alert(err.response?.data?.detail || 'Failed to submit request');
+      ui.error(err.response?.data?.detail || 'Failed to submit request');
     }
   };
 
   const handleStatusUpdate = async (id, status) => {
     const comment = window.prompt(`Enter ${status.toLowerCase()} comment (required):`);
     if (!comment || !comment.trim()) {
-      alert('Comment is required.');
+      ui.warning('Comment is required.');
       return;
     }
     try {
       await leaveAPI.updateStatus(id, status, comment.trim());
       fetchData();
     } catch (err) {
-      alert(err.response?.data?.detail || 'Failed to update request');
+      ui.error(err.response?.data?.detail || 'Failed to update request');
     }
   };
 
@@ -173,6 +185,8 @@ export default function SchedulesPage({ departmentScoped = false }) {
         </div>
       </header>
 
+      {pageError && <ErrorStateStandard message={pageError} onRetry={fetchData} />}
+
       {canViewOrgLeaveUsage && (
         <div className="leave-usage-grid">
           {usageSummary.map((item) => (
@@ -237,10 +251,13 @@ export default function SchedulesPage({ departmentScoped = false }) {
           </div>
 
           {loading ? (
-            <div className="table-loading">
-              <div className="loading-spinner"></div>
-              <span>Loading leave requests...</span>
-            </div>
+            <TableSkeleton rows={8} columns={isHR ? 7 : 5} label="Loading leave requests..." />
+          ) : requests.length === 0 ? (
+            <EmptyStateStandard
+              icon="event_busy"
+              title="No leave requests"
+              message="Submitted leave requests will appear here."
+            />
           ) : (
             <div className="table-wrapper">
               <table className="premium-table">
@@ -256,72 +273,63 @@ export default function SchedulesPage({ departmentScoped = false }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {requests.length === 0 ? (
-                    <tr>
-                      <td colSpan={isHR ? 7 : 5} className="table-empty">
-                        <span className="material-symbols-outlined">event_busy</span>
-                        <p>No leave requests found</p>
+                  {requests.map(req => (
+                    <tr key={req.request_id}>
+                      {isHR && (
+                        <td>
+                          <span className="table-cell-name">{req.employee_name}</span>
+                        </td>
+                      )}
+                      <td>
+                        <span className="leave-type-chip">{req.leave_type_name}</span>
                       </td>
+                      <td>
+                        <div className="duration-cell">
+                          <span className="duration-dates">{req.start_date}</span>
+                          <span className="duration-separator">→</span>
+                          <span className="duration-dates">{req.end_date}</span>
+                        </div>
+                      </td>
+                      <td>
+                        <span className="table-cell-secondary">{req.reason || '—'}</span>
+                      </td>
+                      <td>
+                        <span className="table-cell-secondary">{req.review_comment || '—'}</span>
+                      </td>
+                      <td>
+                        <span className={`status-chip ${
+                          req.status === 'APPROVED' ? 'status-chip--active' :
+                          req.status === 'REJECTED' ? 'status-chip--danger' :
+                          req.status === 'CANCELLED' ? 'status-chip--inactive' :
+                          'status-chip--warning'
+                        }`}>
+                          {req.status}
+                        </span>
+                      </td>
+                      {isHR && (
+                        <td>
+                          {req.status === 'PENDING' ? (
+                            <div className="action-buttons">
+                              <button
+                                className="action-btn action-btn--approve"
+                                onClick={() => handleStatusUpdate(req.request_id, 'APPROVED')}
+                              >
+                                <span className="material-symbols-outlined">check</span>
+                              </button>
+                              <button
+                                className="action-btn action-btn--reject"
+                                onClick={() => handleStatusUpdate(req.request_id, 'REJECTED')}
+                              >
+                                <span className="material-symbols-outlined">close</span>
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="table-cell-secondary">Reviewed</span>
+                          )}
+                        </td>
+                      )}
                     </tr>
-                  ) : (
-                    requests.map(req => (
-                      <tr key={req.request_id}>
-                        {isHR && (
-                          <td>
-                            <span className="table-cell-name">{req.employee_name}</span>
-                          </td>
-                        )}
-                        <td>
-                          <span className="leave-type-chip">{req.leave_type_name}</span>
-                        </td>
-                        <td>
-                          <div className="duration-cell">
-                            <span className="duration-dates">{req.start_date}</span>
-                            <span className="duration-separator">→</span>
-                            <span className="duration-dates">{req.end_date}</span>
-                          </div>
-                        </td>
-                        <td>
-                          <span className="table-cell-secondary">{req.reason || '—'}</span>
-                        </td>
-                        <td>
-                          <span className="table-cell-secondary">{req.review_comment || '—'}</span>
-                        </td>
-                        <td>
-                          <span className={`status-chip ${
-                            req.status === 'APPROVED' ? 'status-chip--active' :
-                            req.status === 'REJECTED' ? 'status-chip--danger' :
-                            req.status === 'CANCELLED' ? 'status-chip--inactive' :
-                            'status-chip--warning'
-                          }`}>
-                            {req.status}
-                          </span>
-                        </td>
-                        {isHR && (
-                          <td>
-                            {req.status === 'PENDING' ? (
-                              <div className="action-buttons">
-                                <button
-                                  className="action-btn action-btn--approve"
-                                  onClick={() => handleStatusUpdate(req.request_id, 'APPROVED')}
-                                >
-                                  <span className="material-symbols-outlined">check</span>
-                                </button>
-                                <button
-                                  className="action-btn action-btn--reject"
-                                  onClick={() => handleStatusUpdate(req.request_id, 'REJECTED')}
-                                >
-                                  <span className="material-symbols-outlined">close</span>
-                                </button>
-                              </div>
-                            ) : (
-                              <span className="table-cell-secondary">Reviewed</span>
-                            )}
-                          </td>
-                        )}
-                      </tr>
-                    ))
-                  )}
+                  ))}
                 </tbody>
               </table>
             </div>

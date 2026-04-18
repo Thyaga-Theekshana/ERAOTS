@@ -1,11 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { correctionsAPI } from '../services/api';
+import { useUIFeedback } from '../context/UIFeedbackContext';
+import { TableSkeleton, EmptyStateStandard, ErrorStateStandard } from '../components/DataStates';
 
 export default function MyCorrectionsPage() {
   const navigate = useNavigate();
+  const ui = useUIFeedback();
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [pageError, setPageError] = useState('');
 
   useEffect(() => {
     fetchMyRequests();
@@ -15,9 +19,14 @@ export default function MyCorrectionsPage() {
     setLoading(true);
     try {
       const res = await correctionsAPI.myCorrections();
-      setRequests(res.data);
+      setPageError('');
+      setRequests(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.error('Failed to fetch requests', err);
+      const detail = err.response?.data?.detail || 'Failed to load your correction requests.';
+      setPageError(detail);
+      ui.error(detail);
+      setRequests([]);
     } finally {
       setLoading(false);
     }
@@ -50,17 +59,18 @@ export default function MyCorrectionsPage() {
         </div>
       </header>
 
+      {pageError && <ErrorStateStandard message={pageError} onRetry={fetchMyRequests} />}
+
       <div className="bento-grid">
         <div className="card glass-subtle bento-span-full">
           {loading ? (
-            <div className="table-loading">
-              <div className="loading-spinner"></div>
-            </div>
+            <TableSkeleton rows={6} columns={6} label="Loading your correction requests..." />
           ) : requests.length === 0 ? (
-            <div className="empty-state">
-              <span className="material-symbols-outlined">description</span>
-              <p>You haven't submitted any correction requests.</p>
-            </div>
+            <EmptyStateStandard
+              icon="description"
+              title="No correction requests yet"
+              message="Your submitted correction requests will appear here."
+            />
           ) : (
             <table className="data-table">
               <thead>

@@ -5,16 +5,20 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { scheduleAPI, leaveAPI } from '../services/api';
+import { useUIFeedback } from '../context/UIFeedbackContext';
 import LeaveCalendarView from '../components/LeaveCalendarView';
 import WeekScheduleView from '../components/WeekScheduleView';
+import { TableSkeleton, ErrorStateStandard } from '../components/DataStates';
 
 export default function MySchedulePage() {
   const { user } = useAuth();
+  const ui = useUIFeedback();
   const [activeTab, setActiveTab] = useState('week');
   const [openLeaveRequestNonce, setOpenLeaveRequestNonce] = useState(0);
   const [schedules, setSchedules] = useState([]);
   const [leaveBalance, setLeaveBalance] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [pageError, setPageError] = useState('');
   const [currentWeek, setCurrentWeek] = useState(() => {
     const now = new Date();
     const dayOfWeek = now.getDay();
@@ -32,6 +36,7 @@ export default function MySchedulePage() {
     
     setLoading(true);
     try {
+      setPageError('');
       const [schedRes, balanceRes] = await Promise.all([
         scheduleAPI.mySchedule({ employee_id: user.employee_id }),
         leaveAPI.getBalance()
@@ -40,6 +45,11 @@ export default function MySchedulePage() {
       setLeaveBalance(balanceRes.data || []);
     } catch (err) {
       console.error('Failed to fetch data:', err);
+      const detail = err.response?.data?.detail || 'Failed to fetch schedule and leave balance.';
+      setPageError(detail);
+      ui.error(detail);
+      setSchedules([]);
+      setLeaveBalance([]);
     } finally {
       setLoading(false);
     }
@@ -78,6 +88,8 @@ export default function MySchedulePage() {
           Leave Request
         </button>
       </header>
+
+      {pageError && <ErrorStateStandard message={pageError} onRetry={fetchData} />}
 
       {/* Tab Navigation */}
       <div className="schedule-tabs">
@@ -133,10 +145,7 @@ export default function MySchedulePage() {
 
       {/* Content Area */}
       {loading ? (
-        <div className="table-loading">
-          <div className="loading-spinner"></div>
-          <span>Loading schedule...</span>
-        </div>
+        <TableSkeleton rows={8} columns={5} label="Loading personal schedule..." />
       ) : (
         <>
           {activeTab === 'week' && (

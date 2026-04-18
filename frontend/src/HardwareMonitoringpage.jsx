@@ -8,7 +8,60 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { hardwareMonitoringAPI, createDashboardSocket } from '../services/api';
+import { TableSkeleton, EmptyStateStandard, ErrorStateStandard } from './components/DataStates';
 import './HardwareMonitoring.css';
+
+const isPlainObject = (value) => value && typeof value === 'object' && !Array.isArray(value);
+
+const normalizeScanners = (payload) => {
+  if (!Array.isArray(payload)) {
+    return [];
+  }
+
+  return payload.filter(isPlainObject).map((scanner, index) => ({
+    ...scanner,
+    scanner_id: scanner.scanner_id || `unknown-${index}`,
+    name: scanner.name || 'Unknown Scanner',
+    door_name: scanner.door_name || 'Unknown Door',
+    status: scanner.status || 'OFFLINE',
+    heartbeat_interval_sec: Number.isFinite(Number(scanner.heartbeat_interval_sec)) ? Number(scanner.heartbeat_interval_sec) : 0,
+    response_time_ms: Number.isFinite(Number(scanner.response_time_ms)) ? Number(scanner.response_time_ms) : null,
+    error_count: Number.isFinite(Number(scanner.error_count)) ? Number(scanner.error_count) : 0,
+    last_heartbeat: scanner.last_heartbeat || null,
+  }));
+};
+
+const normalizeStats = (payload) => {
+  if (!isPlainObject(payload)) {
+    return null;
+  }
+
+  return {
+    ...payload,
+    total_scanners: Number.isFinite(Number(payload.total_scanners)) ? Number(payload.total_scanners) : 0,
+    online: Number.isFinite(Number(payload.online)) ? Number(payload.online) : 0,
+    offline: Number.isFinite(Number(payload.offline)) ? Number(payload.offline) : 0,
+    degraded: Number.isFinite(Number(payload.degraded)) ? Number(payload.degraded) : 0,
+    uptime_percentage: Number.isFinite(Number(payload.uptime_percentage)) ? Number(payload.uptime_percentage) : 0,
+    average_response_time_ms: Number.isFinite(Number(payload.average_response_time_ms)) ? Number(payload.average_response_time_ms) : 0,
+    error_count_today: Number.isFinite(Number(payload.error_count_today)) ? Number(payload.error_count_today) : 0,
+  };
+};
+
+const normalizeLogs = (payload) => {
+  if (!Array.isArray(payload)) {
+    return [];
+  }
+
+  return payload.filter(isPlainObject).map((log, index) => ({
+    ...log,
+    log_id: log.log_id || `log-${index}`,
+    status: log.status || 'UNKNOWN',
+    checked_at: log.checked_at || null,
+    response_time_ms: Number.isFinite(Number(log.response_time_ms)) ? Number(log.response_time_ms) : null,
+    error_message: log.error_message || '',
+  }));
+};
 
 export default function HardwareMonitoringPage() {
   const { user } = useAuth();
@@ -19,6 +72,7 @@ export default function HardwareMonitoringPage() {
   const [logs, setLogs] = useState([]);
   const [showLogs, setShowLogs] = useState(false);
   const [wsConnected, setWsConnected] = useState(false);
+  const [pageError, setPageError] = useState('');
 
   // Fetch initial data
   useEffect(() => {
@@ -48,14 +102,19 @@ export default function HardwareMonitoringPage() {
   const fetchData = async () => {
     try {
       setLoading(true);
+      setPageError('');
       const [scannersRes, statsRes] = await Promise.all([
         hardwareMonitoringAPI.getAll(),
         hardwareMonitoringAPI.getStats(),
       ]);
-      setScanners(scannersRes.data || []);
-      setStats(statsRes.data);
+      setScanners(normalizeScanners(scannersRes.data));
+      setStats(normalizeStats(statsRes.data));
     } catch (err) {
       console.error('Failed to fetch hardware data:', err);
+      const detail = err.response?.data?.detail || 'Failed to load hardware monitoring data.';
+      setPageError(detail);
+      setScanners([]);
+      setStats(null);
     } finally {
       setLoading(false);
     }
@@ -86,9 +145,10 @@ export default function HardwareMonitoringPage() {
   const fetchLogs = async (scannerId) => {
     try {
       const res = await hardwareMonitoringAPI.getLogs(scannerId);
-      setLogs(res.data || []);
+      setLogs(normalizeLogs(res.data));
     } catch (err) {
       console.error('Failed to fetch logs:', err);
+      setLogs([]);
     }
   };
 
@@ -127,7 +187,7 @@ export default function HardwareMonitoringPage() {
   if (loading) {
     return (
       <div className="page-container">
-        <div className="loading-spinner">Loading hardware data...</div>
+        <TableSkeleton rows={6} columns={4} label="Loading hardware monitoring data..." />
       </div>
     );
   }
@@ -142,6 +202,8 @@ export default function HardwareMonitoringPage() {
           <p className="page-subtitle">Real-time scanner monitoring and analytics</p>
         </div>
       </div>
+
+      {pageError && <ErrorStateStandard message={pageError} onRetry={fetchData} />}
 
       {/* Statistics Bar */}
       <div className="hardware-stats-bar">
@@ -169,7 +231,11 @@ export default function HardwareMonitoringPage() {
       {/* Scanners Grid */}
       <div className="hardware-grid">
         {scanners.length === 0 ? (
-          <div className="no-data">No scanners found</div>
+          <EmptyStateStandard
+            icon="devices"
+            title="No scanners found"
+            message="Scanner health data will appear once hardware nodes are active."
+          />
         ) : (
           scanners.map((scanner) => (
             <div key={scanner.scanner_id} className="hardware-card glass">

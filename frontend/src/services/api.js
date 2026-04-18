@@ -248,9 +248,14 @@ export const emergencyAPI = {
 
 // ==================== SYSTEM SETTINGS ====================
 export const settingsAPI = {
-  getPolicies: () => api.get("/api/settings/policies"),
-  updatePolicy: (id, value) =>
-    api.put(`/api/settings/policies/${id}`, { value }),
+  getPolicies: (params) => api.get("/api/settings/policies", { params }),
+  updatePolicy: (id, data) => {
+    const payload = (data && typeof data === "object" && "value" in data)
+      ? data
+      : { value: data };
+    return api.put(`/api/settings/policies/${id}`, payload);
+  },
+  createOverride: (data) => api.post("/api/settings/policies/overrides", data),
 };
 
 // ==================== CALENDAR SYNC ====================

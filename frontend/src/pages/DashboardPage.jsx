@@ -12,14 +12,45 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { eventsAPI, attendanceAPI, createDashboardSocket, leaveAPI, productivityAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { useUIFeedback } from '../context/UIFeedbackContext';
 import NotificationAnalytics from '../components/notifications/NotificationAnalytics';
+
+const isPlainObject = (value) => value && typeof value === 'object' && !Array.isArray(value);
+
+const toNumber = (value, fallback = 0) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const normalizeOccupancy = (payload) => {
+  if (!isPlainObject(payload)) {
+    return {
+      total_inside: 0,
+      total_capacity: 200,
+      active_count: 0,
+      away_count: 0,
+      on_break_count: 0,
+    };
+  }
+
+  return {
+    ...payload,
+    total_inside: toNumber(payload.total_inside, 0),
+    total_capacity: toNumber(payload.total_capacity, 200),
+    active_count: toNumber(payload.active_count, 0),
+    away_count: toNumber(payload.away_count, 0),
+    on_break_count: toNumber(payload.on_break_count, 0),
+  };
+};
 
 export default function DashboardPage() {
   const navigate = useNavigate();
+  const ui = useUIFeedback();
   const { user, isEmployee, isManager, isAdmin, isSuperAdmin } = useAuth();
   const [occupancy, setOccupancy] = useState(null);
   const [recentEvents, setRecentEvents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [pageError, setPageError] = useState('');
   
   // Status override state
   const [myStatus, setMyStatus] = useState(null);
@@ -40,11 +71,21 @@ export default function DashboardPage() {
   // Productivity Stats
   const [prodStats, setProdStats] = useState(null);
 
+  const refreshOccupancy = useCallback(async () => {
+    try {
+      const res = await eventsAPI.occupancy();
+      setOccupancy(normalizeOccupancy(res.data));
+    } catch (err) {
+      console.error('Failed to refresh occupancy:', err);
+    }
+  }, []);
+
   const fetchMyStatus = useCallback(async () => {
     if (!user?.employee_id) return;
     try {
       const res = await eventsAPI.employeeStates();
-      const myRecord = res.data?.find(e => e.employee_id === user.employee_id);
+      const records = Array.isArray(res.data) ? res.data : [];
+      const myRecord = records.find(e => e.employee_id === user.employee_id);
       if (myRecord) {
         setMyStatus(myRecord.current_status);
       }
@@ -56,7 +97,7 @@ export default function DashboardPage() {
   const fetchPendingTransitions = useCallback(async () => {
     try {
       const res = await eventsAPI.getPendingTransitions();
-      setPendingTransitions(res.data || []);
+      setPendingTransitions(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       // Endpoint may not exist or return empty - that's OK
       setPendingTransitions([]);
@@ -67,6 +108,7 @@ export default function DashboardPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
+        setPageError('');
         // All users fetch their own status
         await fetchMyStatus();
         
@@ -76,8 +118,8 @@ export default function DashboardPage() {
             eventsAPI.occupancy(),
             eventsAPI.recent(20),
           ]);
-          setOccupancy(occRes.data);
-          setRecentEvents(eventsRes.data);
+          setOccupancy(normalizeOccupancy(occRes.data));
+          setRecentEvents(Array.isArray(eventsRes.data) ? eventsRes.data : []);
           await fetchPendingTransitions();
         }
         
@@ -85,11 +127,12 @@ export default function DashboardPage() {
         if (isEmployee || isManager) {
           try {
             const leaveRes = await leaveAPI.myRequests();
-            const pendingLeaves = (leaveRes.data || []).filter(l => l.status === 'PENDING').length;
+            const leaveRequests = Array.isArray(leaveRes.data) ? leaveRes.data : [];
+            const pendingLeaves = leaveRequests.filter(l => l.status === 'PENDING').length;
             setPersonalStats(prev => ({ ...prev, pendingLeaves }));
             
             const prodRes = await productivityAPI.getMyStats();
-            setProdStats(prodRes.data);
+            setProdStats(isPlainObject(prodRes.data) ? prodRes.data : null);
           } catch (e) {
             // Endpoints may not be available
           }
@@ -98,11 +141,14 @@ export default function DashboardPage() {
         if (isAdmin || isSuperAdmin || isManager) {
           try {
             const teamProdRes = await productivityAPI.getTeamStats();
-            setProdStats(teamProdRes.data);
+            setProdStats(isPlainObject(teamProdRes.data) ? teamProdRes.data : null);
           } catch(e) {}
         }
       } catch (err) {
         console.error('Failed to fetch dashboard data:', err);
+        const detail = err.response?.data?.detail || 'Failed to load dashboard data.';
+        setPageError(detail);
+        ui.error(detail);
       } finally {
         setLoading(false);
       }
@@ -122,7 +168,7 @@ export default function DashboardPage() {
           scan_timestamp: data.timestamp,
           is_valid: true,
         }, ...prev.slice(0, 49)]);
-        eventsAPI.occupancy().then(res => setOccupancy(res.data));
+        refreshOccupancy();
         fetchMyStatus();
       }
       if (data.type === 'STATUS_CHANGE' || data.type === 'PENDING_TRANSITION') {
@@ -131,7 +177,7 @@ export default function DashboardPage() {
       }
     });
     return () => ws.close();
-  }, [fetchMyStatus, fetchPendingTransitions]);
+  }, [fetchMyStatus, fetchPendingTransitions, refreshOccupancy]);
 
   // Handle status override (toggle between ACTIVE and IN_MEETING)
   const handleStatusToggle = async () => {
@@ -142,10 +188,10 @@ export default function DashboardPage() {
     try {
       await eventsAPI.statusOverride(newStatus);
       setMyStatus(newStatus);
-      eventsAPI.occupancy().then(res => setOccupancy(res.data));
+      refreshOccupancy();
     } catch (err) {
       console.error('Status override failed:', err);
-      alert(err.response?.data?.detail || 'Failed to update status');
+      ui.error(err.response?.data?.detail || 'Failed to update status');
     } finally {
       setStatusLoading(false);
     }
@@ -162,7 +208,7 @@ export default function DashboardPage() {
       }
       await fetchPendingTransitions();
       await fetchMyStatus();
-      eventsAPI.occupancy().then(res => setOccupancy(res.data));
+      refreshOccupancy();
     } catch (err) {
       console.error('Transition action failed:', err);
     } finally {
@@ -188,10 +234,10 @@ export default function DashboardPage() {
   const handleExportReport = async () => {
     try {
       const res = await attendanceAPI.list();
-      const records = res.data || [];
+      const records = Array.isArray(res.data) ? res.data : [];
       
       if (records.length === 0) {
-        alert('No attendance records to export');
+        ui.warning('No attendance records to export');
         return;
       }
 
@@ -218,7 +264,7 @@ export default function DashboardPage() {
       link.click();
     } catch (err) {
       console.error('Export failed:', err);
-      alert('Failed to export report');
+      ui.error('Failed to export report');
     }
   };
 
@@ -255,6 +301,13 @@ export default function DashboardPage() {
     },
   ];
 
+  const errorBanner = pageError ? (
+    <div className="alert-banner alert-banner--error">
+      <span className="material-symbols-outlined">error</span>
+      <span>{pageError}</span>
+    </div>
+  ) : null;
+
   // Employee Personal Dashboard
   if (isEmployee && !isAdmin && !isSuperAdmin) {
     return (
@@ -266,6 +319,8 @@ export default function DashboardPage() {
             <p className="dashboard-subtitle">Your personal attendance dashboard</p>
           </div>
         </div>
+
+        {errorBanner}
 
         {/* Personal Status Card */}
         <div className="dashboard-personal-grid">
@@ -456,6 +511,8 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+
+      {errorBanner}
 
       {/* Bento Grid Layout */}
       <div className="bento-grid">

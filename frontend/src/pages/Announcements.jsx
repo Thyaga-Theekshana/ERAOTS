@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { announcementsAPI, employeeAPI, departmentAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { useUIFeedback } from '../context/UIFeedbackContext';
+import { TableSkeleton, EmptyStateStandard, ErrorStateStandard } from '../components/DataStates';
 import '../components/notifications/Notifications.css';
 
 const PRIORITY_COLORS = {
@@ -12,6 +14,7 @@ const PRIORITY_COLORS = {
 
 export default function Announcements() {
   const { isSuperAdmin, isAdmin } = useAuth();
+  const ui = useUIFeedback();
   const [announcements, setAnnouncements] = useState([]);
   const [loading, setLoading] = useState(true);
   
@@ -24,13 +27,19 @@ export default function Announcements() {
   const [submitting, setSubmitting] = useState(false);
   const [departments, setDepartments] = useState([]);
   const [employees, setEmployees] = useState([]);
+  const [pageError, setPageError] = useState('');
 
   const fetchItems = async () => {
     try {
+      setPageError('');
       const res = await announcementsAPI.list();
       setAnnouncements(res.data || []);
     } catch (err) {
       console.error(err);
+      const detail = err.response?.data?.detail || 'Failed to load announcements.';
+      setPageError(detail);
+      ui.error(detail);
+      setAnnouncements([]);
     } finally {
       setLoading(false);
     }
@@ -71,10 +80,10 @@ export default function Announcements() {
         sendTiming: 'NOW', scheduled_at: ''
       });
       fetchItems();
-      alert("Announcement created!");
+      ui.success('Announcement created!');
     } catch (err) {
       console.error(err);
-      alert("Failed to create announcement.");
+      ui.error('Failed to create announcement.');
     } finally {
       setSubmitting(false);
     }
@@ -99,6 +108,8 @@ export default function Announcements() {
   return (
     <div className="page-wrapper" style={{ padding: '24px', maxWidth: '800px', margin: '0 auto' }}>
       <h1 className="header-title" style={{ marginBottom: '24px' }}>Announcements</h1>
+
+      {pageError && <ErrorStateStandard message={pageError} onRetry={fetchItems} />}
 
       {/* ADMIN CREATION FORM */}
       {(isSuperAdmin || isAdmin) && (
@@ -196,12 +207,13 @@ export default function Announcements() {
       {/* FEED (ALL ROLES) */}
       <h3 style={{ marginBottom: '16px' }}>Recent Announcements</h3>
       {loading ? (
-        <div className="skeleton" style={{ height: '200px' }}></div>
+        <TableSkeleton rows={6} columns={3} label="Loading announcements..." />
       ) : sortedAnnouncements.length === 0 ? (
-        <div className="glass-card" style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
-          <span className="material-symbols-outlined" style={{ fontSize: '48px', marginBottom: '16px', opacity: 0.5 }}>campaign</span>
-          <p>No announcements right now.</p>
-        </div>
+        <EmptyStateStandard
+          icon="campaign"
+          title="No announcements"
+          message="There are no announcements to display right now."
+        />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {sortedAnnouncements.map(ann => (

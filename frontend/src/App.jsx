@@ -6,6 +6,8 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
+import { UIFeedbackProvider } from './context/UIFeedbackContext';
+import UIFeedbackToasts from './components/UIFeedbackToasts';
 import AppLayout from './layouts/AppLayout';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
@@ -35,6 +37,12 @@ import PlaceholderPage from './pages/PlaceholderPage';
 import PersonalInsightsPage from './pages/PersonalInsightsPage';
 import CompanyInsightsPage from './pages/CompanyInsightsPage';
 import SystemInsightsPage from './pages/SystemInsightsPage';
+import DirectoryHubPage from './pages/DirectoryHubPage';
+import AttendanceHubPage from './pages/AttendanceHubPage';
+import ScheduleHubPage from './pages/ScheduleHubPage';
+import CorrectionsHubPage from './pages/CorrectionsHubPage';
+import InsightsHubPage from './pages/InsightsHubPage';
+import CommunicationsHubPage from './pages/CommunicationsHubPage';
 import './styles/index.css';
 import HardwarePage from './pages/Hardwarepage';
 
@@ -74,6 +82,15 @@ function ProtectedRoute({ children }) {
   return children;
 }
 
+const nativeAlert = window.alert.bind(window);
+window.alert = (message) => {
+  if (typeof window !== 'undefined' && window.__eraots_ui_feedback__) {
+    window.__eraots_ui_feedback__.error(message || 'Unexpected action feedback');
+    return;
+  }
+  nativeAlert(message);
+};
+
 /**
  * Role-based route wrapper — redirects to dashboard if user doesn't have required role.
  */
@@ -89,9 +106,10 @@ function RoleRoute({ children, allowedRoles }) {
 function App() {
   return (
     <ThemeProvider>
-      <AuthProvider>
-        <BrowserRouter>
-          <Routes>
+      <UIFeedbackProvider>
+        <AuthProvider>
+          <BrowserRouter>
+            <Routes>
             {/* Public */}
             <Route path="/login" element={<LoginPage />} />
 
@@ -113,6 +131,13 @@ function App() {
               <Route path="my-insights" element={<PersonalInsightsPage />} />
               <Route path="my-schedule" element={<MySchedulePage />} />
 
+              {/* Unified Hubs */}
+              <Route path="attendance-hub" element={<AttendanceHubPage />} />
+              <Route path="schedule-hub" element={<ScheduleHubPage />} />
+              <Route path="corrections-hub" element={<CorrectionsHubPage />} />
+              <Route path="insights-hub" element={<InsightsHubPage />} />
+              <Route path="communications" element={<CommunicationsHubPage />} />
+
               {/* Manager team pages */}
               <Route path="team" element={
                 <RoleRoute allowedRoles={['MANAGER']}>
@@ -131,6 +156,11 @@ function App() {
               } />
 
               {/* Admin/HR pages */}
+              <Route path="directory" element={
+                <RoleRoute allowedRoles={['HR_MANAGER', 'SUPER_ADMIN']}>
+                  <DirectoryHubPage />
+                </RoleRoute>
+              } />
               <Route path="employees" element={
                 <RoleRoute allowedRoles={['HR_MANAGER', 'SUPER_ADMIN']}>
                   <EmployeesPage />
@@ -185,7 +215,7 @@ function App() {
                 </RoleRoute>
               } />
               <Route path="settings" element={
-                <RoleRoute allowedRoles={['SUPER_ADMIN', 'HR_MANAGER']}>
+                <RoleRoute allowedRoles={['SUPER_ADMIN', 'HR_MANAGER', 'MANAGER']}>
                   <SettingsPage />
                 </RoleRoute>
               } />
@@ -229,9 +259,11 @@ function App() {
 
             {/* Catch-all */}
             <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </BrowserRouter>
-      </AuthProvider>
+            </Routes>
+            <UIFeedbackToasts />
+          </BrowserRouter>
+        </AuthProvider>
+      </UIFeedbackProvider>
     </ThemeProvider>
   );
 }
